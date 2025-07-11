@@ -9,11 +9,22 @@ sentence-transformers
 Pillow
 opencv-python
 moviepy
-SpeechRecognition
-pydub
+# SpeechRecognition # Not actively used yet, can be commented out or kept
+# pydub # Not actively used yet
 pdfminer.six
 python-docx
-requests
-beautifulsoup4
-tineye-api
-google-api-python-client
+# requests # Not actively used by current backend logic, consider removing if not planned soon
+# beautifulsoup4 # Not actively used
+# tineye-api # Not actively used
+# google-api-python-client # Not actively used
+
+# Database
+sqlalchemy
+alembic
+python-dotenv # For loading .env files for config, including DATABASE_URL
+
+# AI Services
+openai
+
+# Note: For SQLite, no separate driver needed in requirements.txt.
+# For PostgreSQL, add: psycopg2-binary

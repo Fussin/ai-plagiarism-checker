@@ -1,17 +1,16 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
+from sqlalchemy.orm import Session
 
-from .config import settings
-from .models import TokenData
-# Assuming fake_users_db is accessible for user lookup, or we adapt.
-# For now, we'll just validate the token and extract email.
-# A more robust solution would fetch user details from the DB.
-from .routers.auth import fake_users_db # Temporary for user validation
+from backend.config import settings
+from backend.models import TokenData, UserDB # UserDB is the SQLAlchemy model
+from backend.database import get_db # Database session dependency
+from backend.routers.auth import get_user_by_email # Helper to query user by email
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login") # Matches the login route
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -19,25 +18,19 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
+        email: str | None = payload.get("sub")
         if email is None:
             raise credentials_exception
         token_data = TokenData(email=email)
     except JWTError:
         raise credentials_exception
 
-    user = fake_users_db.get(email) # Check if user exists in our mock DB
+    user = get_user_by_email(db, email=token_data.email) # Fetch user from DB
     if user is None:
         raise credentials_exception
-    if user.get("disabled"): # Check if user is marked as disabled
-         raise HTTPException(status_code=400, detail="Inactive user")
+    return user # Returns UserDB instance
 
-    return user # Return the user dict from fake_users_db (or a user model instance)
-
-async def get_current_active_user(current_user: dict = Depends(get_current_user)):
-    # This is a convenience dependency if you want to ensure the user is active
-    # The check for "disabled" is already in get_current_user for this basic setup.
-    # If get_current_user only returned TokenData, this would be more distinct.
-    if current_user.get("disabled"): # Redundant if get_current_user already checks
-        raise HTTPException(status_code=400, detail="Inactive user")
+async def get_current_active_user(current_user: UserDB = Depends(get_current_user)):
+    if not current_user.is_active: # Check the 'is_active' field from UserDB model
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
     return current_user

@@ -1,24 +1,59 @@
-from fastapi import APIRouter, File, UploadFile, Form, Depends, HTTPException, status
-from typing import List
+from fastapi import APIRouter, File, UploadFile, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List, Optional # Added Optional
 import shutil
 import os
+import json # For storing lists as JSON strings in DB
 
-from ..config import settings
-from ..models import TextCheckRequest, PlagiarismResult
-# from ..dependencies import get_current_user # To protect routes
-from ..services import text_processing, image_processing, video_processing, nlp_tasks
+from backend.config import settings
+# Use PlagiarismResultSchema for response, UserDB for current_user type hint
+from backend.models import TextCheckRequest, PlagiarismResultSchema, UserDB, ScanHistoryDB, ScanHistoryCreateSchema
+from backend.database import get_db
+# Make get_current_active_user an optional dependency for checker routes
+from backend.dependencies import get_current_active_user
+from backend.services import text_processing, image_processing, video_processing, nlp_tasks
 
 router = APIRouter(
     prefix="/check",
     tags=["checker"],
-    # dependencies=[Depends(get_current_user)] # Uncomment to protect all routes in this router
+    # No global dependency here, apply it optionally per route if needed for history
 )
 
+# --- Helper function to save scan history ---
+async def _save_scan_to_history(
+    db: Session,
+    user_id: int,
+    content_type: str,
+    result: PlagiarismResultSchema, # Expecting the Pydantic schema for result
+    file_name: Optional[str] = None,
+    input_snippet: Optional[str] = None
+):
+    if not input_snippet and result.matched_sources: # Create a generic snippet if none provided
+        input_snippet = f"Scan result with score: {result.originality_score*100:.1f}%"
+
+    history_entry = ScanHistoryDB(
+        user_id=user_id,
+        content_type=content_type,
+        file_name=file_name,
+        input_snippet=input_snippet[:255] if input_snippet else None, # Truncate snippet
+        originality_score=result.originality_score,
+        matched_sources_json=json.dumps(result.matched_sources),
+        rewrite_suggestions_json=json.dumps(result.rewrite_suggestions)
+    )
+    db.add(history_entry)
+    db.commit()
+    # db.refresh(history_entry) # Not strictly needed unless using its generated ID immediately
+
+
 # --- Text Checking ---
-@router.post("/text", response_model=PlagiarismResult)
-async def check_text_plagiarism(request: TextCheckRequest):
+@router.post("/text", response_model=PlagiarismResultSchema)
+async def check_text_plagiarism(
+    request: TextCheckRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[UserDB] = Depends(get_current_active_user) # Optional user
+):
     if not request.text.strip():
-        return PlagiarismResult(originality_score=1.0, matched_sources=["No text provided."], rewrite_suggestions=[])
+        return PlagiarismResultSchema(originality_score=1.0, matched_sources=["No text provided."], rewrite_suggestions=[])
 
     similarity_results = nlp_tasks.check_text_similarity_self(request.text)
     originality_score = similarity_results["originality_score"]
@@ -36,18 +71,22 @@ async def check_text_plagiarism(request: TextCheckRequest):
         if "Consider rephrasing highly similar sentences." not in rewrite_suggestions:
              rewrite_suggestions.append("Consider rephrasing highly similar sentences.")
 
-
-    if "copy" in request.text.lower(): # Check for keyword "copy"
-        originality_score = min(originality_score, 0.6) # Potentially lower score
+    if "copy" in request.text.lower():
+        originality_score = min(originality_score, 0.6)
         matched_sources.append("Keyword 'copy' detected.")
         if "If using keywords like 'copy', ensure the content is original or properly cited." not in rewrite_suggestions:
             rewrite_suggestions.append("If using keywords like 'copy', ensure the content is original or properly cited.")
 
-    return PlagiarismResult(
+    result = PlagiarismResultSchema(
         originality_score=originality_score,
         matched_sources=matched_sources,
         rewrite_suggestions=rewrite_suggestions
     )
+
+    if current_user:
+        await _save_scan_to_history(db, current_user.id, "text_input", result, input_snippet=request.text[:255])
+
+    return result
 
 # --- File Upload and Processing (Common Utilities) ---
 def save_upload_file(upload_file: UploadFile, destination_folder: str) -> str:
@@ -61,8 +100,12 @@ def save_upload_file(upload_file: UploadFile, destination_folder: str) -> str:
     return file_path
 
 # --- Text File Checking ---
-@router.post("/file", response_model=PlagiarismResult)
-async def check_text_file_plagiarism(file: UploadFile = File(...)):
+@router.post("/file", response_model=PlagiarismResultSchema)
+async def check_text_file_plagiarism(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[UserDB] = Depends(get_current_active_user) # Optional user
+):
     allowed_text_types = [
         "text/plain", "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"
@@ -72,33 +115,42 @@ async def check_text_file_plagiarism(file: UploadFile = File(...)):
 
     temp_file_path = save_upload_file(file, settings.UPLOAD_DIR)
     rewrite_suggestions = []
+    result: PlagiarismResultSchema
+    extracted_text_snippet = None
     try:
         extracted_text = text_processing.extract_text(temp_file_path, file.content_type)
+        extracted_text_snippet = extracted_text[:255] if extracted_text else None
+
         if not extracted_text or not extracted_text.strip():
-            return PlagiarismResult(originality_score=1.0, matched_sources=[f"No text could be extracted from {file.filename} or file is empty."], rewrite_suggestions=rewrite_suggestions)
+            result = PlagiarismResultSchema(originality_score=1.0, matched_sources=[f"No text could be extracted from {file.filename} or file is empty."], rewrite_suggestions=rewrite_suggestions)
+        else:
+            similarity_results = nlp_tasks.check_text_similarity_self(extracted_text)
+            originality_score = similarity_results["originality_score"]
+            matched_sources = []
 
-        similarity_results = nlp_tasks.check_text_similarity_self(extracted_text)
-        originality_score = similarity_results["originality_score"]
-        matched_sources = []
+            if similarity_results["message"]:
+                matched_sources.append(f"NLP Analysis from '{file.filename}': {similarity_results['message']}")
 
-        if similarity_results["message"]:
-            matched_sources.append(f"NLP Analysis from '{file.filename}': {similarity_results['message']}")
+            if similarity_results["similar_pairs"]:
+                for pair in similarity_results["similar_pairs"]:
+                    msg = (f"High similarity ({pair['similarity'] * 100:.1f}%) in '{file.filename}' between: "
+                           f"'{pair['sentence1_text'][:50]}...' and '{pair['sentence2_text'][:50]}...'")
+                    matched_sources.append(msg)
+                if "Consider rephrasing highly similar sentences from the file." not in rewrite_suggestions:
+                     rewrite_suggestions.append("Consider rephrasing highly similar sentences from the file.")
 
-        if similarity_results["similar_pairs"]:
-            for pair in similarity_results["similar_pairs"]:
-                msg = (f"High similarity ({pair['similarity'] * 100:.1f}%) in '{file.filename}' between: "
-                       f"'{pair['sentence1_text'][:50]}...' and '{pair['sentence2_text'][:50]}...'")
-                matched_sources.append(msg)
-            if "Consider rephrasing highly similar sentences from the file." not in rewrite_suggestions:
-                 rewrite_suggestions.append("Consider rephrasing highly similar sentences from the file.")
+            if "copy" in extracted_text.lower():
+                originality_score = min(originality_score, 0.6)
+                matched_sources.append(f"Keyword 'copy' detected in {file.filename}.")
+                if "If using keywords like 'copy' in the file, ensure the content is original or properly cited." not in rewrite_suggestions:
+                    rewrite_suggestions.append("If using keywords like 'copy' in the file, ensure the content is original or properly cited.")
 
-        if "copy" in extracted_text.lower():
-            originality_score = min(originality_score, 0.6)
-            matched_sources.append(f"Keyword 'copy' detected in {file.filename}.")
-            if "If using keywords like 'copy' in the file, ensure the content is original or properly cited." not in rewrite_suggestions:
-                rewrite_suggestions.append("If using keywords like 'copy' in the file, ensure the content is original or properly cited.")
+            result = PlagiarismResultSchema(originality_score=originality_score, matched_sources=matched_sources, rewrite_suggestions=rewrite_suggestions)
 
-        return PlagiarismResult(originality_score=originality_score, matched_sources=matched_sources, rewrite_suggestions=rewrite_suggestions)
+        if current_user:
+            await _save_scan_to_history(db, current_user.id, f"file_{file.content_type.split('/')[-1]}", result, file_name=file.filename, input_snippet=extracted_text_snippet)
+        return result
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -109,8 +161,12 @@ async def check_text_file_plagiarism(file: UploadFile = File(...)):
             os.remove(temp_file_path)
 
 # --- Image Checking ---
-@router.post("/image", response_model=PlagiarismResult)
-async def check_image_plagiarism(file: UploadFile = File(...)):
+@router.post("/image", response_model=PlagiarismResultSchema)
+async def check_image_plagiarism(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[UserDB] = Depends(get_current_active_user) # Optional user
+):
     allowed_image_types = ["image/jpeg", "image/png", "image/gif"]
     if file.content_type not in allowed_image_types:
         raise HTTPException(status_code=400, detail=f"Unsupported image file type: {file.content_type}. Supported: .jpg, .png, .gif")
@@ -119,6 +175,7 @@ async def check_image_plagiarism(file: UploadFile = File(...)):
     originality_score = 1.0
     matched_sources = []
     rewrite_suggestions = []
+    result: PlagiarismResultSchema
 
     try:
         image_hash = image_processing.calculate_image_hash(temp_file_path)
@@ -138,7 +195,12 @@ async def check_image_plagiarism(file: UploadFile = File(...)):
             matched_sources.append(f"Could not calculate perceptual hash for image {os.path.basename(file.filename)}.")
             originality_score = 0.5
 
-        return PlagiarismResult(originality_score=originality_score, matched_sources=matched_sources, rewrite_suggestions=rewrite_suggestions)
+        result = PlagiarismResultSchema(originality_score=originality_score, matched_sources=matched_sources, rewrite_suggestions=rewrite_suggestions)
+
+        if current_user:
+            await _save_scan_to_history(db, current_user.id, f"image_{file.content_type.split('/')[-1]}", result, file_name=file.filename, input_snippet=f"Image hash: {image_hash or 'N/A'}")
+        return result
+
     except Exception as e:
         print(f"Error processing image {file.filename}: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
@@ -150,8 +212,12 @@ async def check_image_plagiarism(file: UploadFile = File(...)):
 MAX_FRAMES_TO_CHECK = 5
 FRAME_INTERVAL_SECONDS = 5
 
-@router.post("/video", response_model=PlagiarismResult)
-async def check_video_plagiarism(file: UploadFile = File(...)):
+@router.post("/video", response_model=PlagiarismResultSchema)
+async def check_video_plagiarism(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[UserDB] = Depends(get_current_active_user) # Optional user
+):
     if file.content_type != "video/mp4":
         raise HTTPException(status_code=400, detail="Unsupported video file type. Only .mp4 is supported for now.")
 
@@ -172,6 +238,7 @@ async def check_video_plagiarism(file: UploadFile = File(...)):
 
     matched_sources = [f"Video file '{video_basename}' received for processing."]
     rewrite_suggestions = []
+    result: PlagiarismResultSchema
 
     try:
         # 1. Audio Processing
@@ -220,16 +287,21 @@ async def check_video_plagiarism(file: UploadFile = File(...)):
                             matched_sources.append(f"    - Source: {hit['url']} (Similarity: {hit['similarity']})")
                         if "If video frames match external sources, ensure originality or rights, or replace the segment." not in rewrite_suggestions:
                              rewrite_suggestions.append("If video frames match external sources, ensure originality or rights, or replace the segment.")
-            if not found_visual_plagiarism and frames_to_check_paths: # Only add if we actually checked frames
+            if not found_visual_plagiarism and frames_to_check_paths:
                  matched_sources.append("No direct visual matches found for analyzed frames in mock reverse search.")
         else:
             matched_sources.append("No frames extracted or frame extraction failed.")
 
         final_originality_score = min(visual_originality_score, audio_originality_score)
-        if found_visual_plagiarism or found_audio_plagiarism: # If any type of plagiarism is found
+        if found_visual_plagiarism or found_audio_plagiarism:
             final_originality_score = min(final_originality_score, 0.2)
 
-        return PlagiarismResult(originality_score=final_originality_score, matched_sources=matched_sources, rewrite_suggestions=rewrite_suggestions)
+        result = PlagiarismResultSchema(originality_score=final_originality_score, matched_sources=matched_sources, rewrite_suggestions=rewrite_suggestions)
+
+        if current_user:
+            snippet = f"Video: {video_basename}. Audio: {transcribed_text[:100]}..." if transcribed_text else f"Video: {video_basename}"
+            await _save_scan_to_history(db, current_user.id, f"video_{file.content_type.split('/')[-1]}", result, file_name=file.filename, input_snippet=snippet)
+        return result
 
     except Exception as e:
         print(f"Error processing video {video_basename}: {e}")

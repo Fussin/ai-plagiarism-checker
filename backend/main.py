@@ -1,40 +1,40 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware # Import CORS middleware
-from .routers import auth, checker
+from fastapi.middleware.cors import CORSMiddleware
+from .routers import auth, checker, history, ai_tools # Import the new ai_tools router
 from .config import settings
 import os
 
+# from .database import create_db_and_tables
+# if settings.DEBUG: # Example: only create tables automatically in debug mode
+#     print("DEBUG mode: Attempting to create database tables if they don't exist.")
+#     create_db_and_tables()
+
 app = FastAPI(title=settings.APP_NAME)
 
-# Create upload and model directories (config.py also does this, defensive)
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-os.makedirs(settings.MODELS_DIR, exist_ok=True)
-
-# CORS Middleware Configuration
-# This allows the frontend (potentially on a different port like 8080 or when opening file directly)
-# to communicate with the backend.
+# CORS Middleware Configuration (origins updated for Next.js default)
 origins = [
-    "http://localhost", # Common if frontend served by a simple server on default port
-    "http://localhost:8080", # Common for Vite, React dev servers
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:8080",
     "http://127.0.0.1",
+    "http://127.0.0.1:3000",
     "http://127.0.0.1:8080",
-    "null", # Allows opening index.html directly as a file in the browser (origin is "null")
-    # Add any other origins if your frontend is hosted elsewhere during development
+    "null",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True, # Allows cookies, authorization headers
-    allow_methods=["*"],    # Allows all methods (GET, POST, etc.)
-    allow_headers=["*"],    # Allows all headers
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(auth.router)
 app.include_router(checker.router)
+app.include_router(history.router)
+app.include_router(ai_tools.router) # Include the AI tools router
 
 @app.get("/")
 async def root():
     return {"message": f"Welcome to {settings.APP_NAME} Backend"}
-
-# Further imports and global configurations can be added here
