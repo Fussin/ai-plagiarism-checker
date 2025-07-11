@@ -3,6 +3,8 @@
 import { useState, FormEvent, ChangeEvent } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import Spinner from '@/components/Spinner';
+import PageWrapper from '@/components/PageWrapper';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ScanResult {
   originality_score: number;
@@ -36,9 +38,14 @@ export default function HomePage() {
   const [isHumanizing, setIsHumanizing] = useState(false);
   const [humanizerError, setHumanizerError] = useState<string | null>(null);
 
+  // State for file input feedback
+  const [fileSelectedFeedback, setFileSelectedFeedback] = useState<string | null>(null);
+
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>, fileType: string) => {
     if (event.target.files && event.target.files[0]) {
       setFiles(prev => ({ ...prev, [fileType]: event.target.files![0] }));
+      setFileSelectedFeedback(fileType);
+      setTimeout(() => setFileSelectedFeedback(null), 1500); // Reset feedback after 1.5s
     } else {
       setFiles(prev => ({ ...prev, [fileType]: null }));
     }
@@ -90,7 +97,10 @@ export default function HomePage() {
   const handleFileSubmit = async (fileTypeKey: string, endpoint: string, scanContentType: string) => {
     const file = files[fileTypeKey];
     if (!file) { setScanError(`Please select a ${scanContentType.split('_')[0]} file.`); return; }
-    setIsScanning(true); setScanError(null); setScanResult(null); setCurrentScanType(`${scanContentType.split('_')[0]} File: ${file.name}`);
+    // Use a more specific currentScanType for file uploads to differentiate loading states
+    setCurrentScanType(`${scanContentType}_${file.name}`);
+    setIsScanning(true); setScanError(null); setScanResult(null);
+
     const formData = new FormData();
     formData.append('file', file);
     try {
@@ -142,9 +152,16 @@ export default function HomePage() {
   const greenButtonClass = `${buttonBaseClass} bg-green-500 hover:bg-green-600`;
   const purpleButtonClass = `${buttonBaseClass} bg-purple-500 hover:bg-purple-600`;
 
+  // Dynamic class for file input based on selection feedback
+  const fileInputDivClass = (fileType: string) =>
+    `p-4 border-2 border-dashed rounded-lg transition-colors duration-300 ease-in-out ${
+      fileSelectedFeedback === fileType
+        ? 'border-green-500 bg-green-50 dark:bg-green-900/30'
+        : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
+    }`;
 
   return (
-    <div className="space-y-8">
+    <PageWrapper className="space-y-8">
       <section className="text-center py-12 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-blue-700 dark:to-indigo-800 rounded-lg shadow-xl text-white">
         <h1 className="text-4xl font-bold mb-4">Advanced AI Plagiarism Checker</h1>
         <p className="text-lg mb-8 px-4">Upload your documents, text, images, or videos to check for originality.</p>
@@ -161,36 +178,44 @@ export default function HomePage() {
       <section className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
         <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-white">Upload & Check Files</h2>
         <div className="grid md:grid-cols-3 gap-6">
-          <div>
-            <label htmlFor="text-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Text Document (PDF, DOCX, TXT)</label>
+          <div className={fileInputDivClass('textFile')}>
+            <label htmlFor="text-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Text Document (PDF, DOCX, TXT)</label>
             <input type="file" id="text-file-upload" onChange={(e) => handleFileChange(e, 'textFile')} accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800 disabled:opacity-50" disabled={isScanning}/>
-            <button onClick={() => handleFileSubmit('textFile', '/check/file', 'file_text')} disabled={isScanning || !files.textFile} className={greenButtonClass}>
-              {isScanning && currentScanType === "file_text File: " + files.textFile?.name ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Text File'}
+            <button onClick={() => handleFileSubmit('textFile', '/check/file', 'file_text')} disabled={isScanning || !files.textFile} className={`${greenButtonClass} w-full`}>
+              {isScanning && currentScanType === `file_text_${files.textFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Text File'}
             </button>
           </div>
-          <div>
-            <label htmlFor="image-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Image (JPG, PNG, GIF)</label>
+          <div className={fileInputDivClass('imageFile')}>
+            <label htmlFor="image-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Image (JPG, PNG, GIF)</label>
             <input type="file" id="image-file-upload" onChange={(e) => handleFileChange(e, 'imageFile')} accept="image/jpeg,image/png,image/gif" className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800 disabled:opacity-50" disabled={isScanning}/>
-            <button onClick={() => handleFileSubmit('imageFile', '/check/image', 'file_image')} disabled={isScanning || !files.imageFile} className={greenButtonClass}>
-              {isScanning && currentScanType === "file_image File: " + files.imageFile?.name ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Image File'}
+            <button onClick={() => handleFileSubmit('imageFile', '/check/image', 'file_image')} disabled={isScanning || !files.imageFile} className={`${greenButtonClass} w-full`}>
+              {isScanning && currentScanType === `file_image_${files.imageFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Image File'}
             </button>
           </div>
-          <div>
-            <label htmlFor="video-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Video (MP4)</label>
+          <div className={fileInputDivClass('videoFile')}>
+            <label htmlFor="video-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Video (MP4)</label>
             <input type="file" id="video-file-upload" onChange={(e) => handleFileChange(e, 'videoFile')} accept="video/mp4" className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800 disabled:opacity-50" disabled={isScanning}/>
-            <button onClick={() => handleFileSubmit('videoFile', '/check/video', 'file_video')} disabled={isScanning || !files.videoFile} className={greenButtonClass}>
-             {isScanning && currentScanType === "file_video File: " + files.videoFile?.name ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Video File'}
+            <button onClick={() => handleFileSubmit('videoFile', '/check/video', 'file_video')} disabled={isScanning || !files.videoFile} className={`${greenButtonClass} w-full`}>
+             {isScanning && currentScanType === `file_video_${files.videoFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Video File'}
             </button>
           </div>
         </div>
       </section>
 
-      {(isScanning || scanResult || scanError) && (
-        <section id="results-preview-section" className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-          <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-white">Scan Results {currentScanType ? `for ${currentScanType}` : ''}</h2>
-          {isScanning && <div className="flex items-center text-indigo-600 dark:text-indigo-400"><Spinner size="w-5 h-5 mr-2" color="text-indigo-600 dark:text-indigo-400"/>Scanning, please wait...</div>}
-          {scanError && <p className="text-red-500 dark:text-red-400">Error: {scanError}</p>}
-          {scanResult && !isScanning && (
+      <AnimatePresence>
+        {(isScanning || scanResult || scanError) && (
+          <motion.section
+            id="results-preview-section"
+            className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md"
+            initial={{ opacity: 0, height: 0, y: 20 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: 20 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+          >
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-white">Scan Results {currentScanType ? `for ${currentScanType.replace(/_/g, " ")}` : ''}</h2>
+            {isScanning && <div className="flex items-center text-indigo-600 dark:text-indigo-400"><Spinner size="w-5 h-5 mr-2" color="text-indigo-600 dark:text-indigo-400"/>Scanning, please wait...</div>}
+            {scanError && <p className="text-red-500 dark:text-red-400">Error: {scanError}</p>}
+            {scanResult && !isScanning && (
             <div className="space-y-3">
               <p><strong>Originality Score:</strong> <span className={`font-bold ${ scanResult.originality_score > 0.9 ? 'text-green-600 dark:text-green-400' : scanResult.originality_score > 0.7 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400' }`}>{(scanResult.originality_score * 100).toFixed(1)}%</span></p>
               {scanResult.matched_sources.length > 0 && ( <div> <h4 className="font-semibold mt-2">Details & Matched Sources:</h4> <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-300 max-h-48 overflow-y-auto"> {scanResult.matched_sources.map((source, index) => <li key={index}>{source}</li>)} </ul> </div> )}
@@ -198,8 +223,9 @@ export default function HomePage() {
               <button onClick={exportResults} className="mt-4 px-6 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-md shadow-sm transition duration-150"> Export Results </button>
             </div>
           )}
-        </section>
-      )}
+          </motion.section>
+        )}
+      </AnimatePresence>
 
       <form onSubmit={handleHumanizeSubmit} className="p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md">
         <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-white">GPT-Powered Text Humanizer</h2>
@@ -207,19 +233,35 @@ export default function HomePage() {
         <button type="submit" disabled={isHumanizing} className={purpleButtonClass}>
           {isHumanizing ? <><Spinner size="w-5 h-5 mr-2" /> Humanizing...</> : 'Humanize Text'}
         </button>
-        {humanizerError && <p className="mt-2 text-red-500 dark:text-red-400">Error: {humanizerError}</p>}
-        {humanizerResult && (
-            <div className="mt-4 p-4 border border-gray-200 dark:border-gray-700 rounded-md min-h-[80px]">
-                <h4 className="font-semibold text-gray-800 dark:text-white">Humanized Text (Model: {humanizerResult.model_used}):</h4>
-                {humanizerResult.humanized_text ? ( <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{humanizerResult.humanized_text}</p> ) : ( <p className="text-gray-500 dark:text-gray-400">Could not generate humanized text. {humanizerResult.error || ''}</p> )}
-                <div className="mt-2 pt-2 border-t dark:border-gray-700">
-                    <h5 className="text-xs font-semibold text-gray-600 dark:text-gray-400">Original Text:</h5>
-                    <p className="text-xs text-gray-500 dark:text-gray-500 whitespace-pre-wrap">{humanizerResult.original_text}</p>
-                </div>
+        <AnimatePresence>
+          {isHumanizing && !humanizerError && !humanizerResult && ( // Show processing only when no error/result yet
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-2 flex items-center text-purple-600 dark:text-purple-400">
+              <Spinner size="w-5 h-5 mr-2" color="text-purple-600 dark:text-purple-400"/> Processing...
+            </motion.div>
+          )}
+          {humanizerError && (
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-2 text-red-500 dark:text-red-400">Error: {humanizerError}</motion.p>
+          )}
+          {humanizerResult && !isHumanizing && ( // Show result only when not actively humanizing (i.e., after completion)
+              <motion.div
+                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y:10 }}
+                className="mt-4 p-4 border border-gray-200 dark:border-gray-700 rounded-md min-h-[80px]"
+              >
+                  <h4 className="font-semibold text-gray-800 dark:text-white">Humanized Text (Model: {humanizerResult.model_used}):</h4>
+                  {humanizerResult.humanized_text ? ( <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{humanizerResult.humanized_text}</p> ) : ( <p className="text-gray-500 dark:text-gray-400">Could not generate humanized text. {humanizerResult.error || ''}</p> )}
+                  <div className="mt-2 pt-2 border-t dark:border-gray-700">
+                      <h5 className="text-xs font-semibold text-gray-600 dark:text-gray-400">Original Text:</h5>
+                      <p className="text-xs text-gray-500 dark:text-gray-500 whitespace-pre-wrap">{humanizerResult.original_text}</p>
+                  </div>
+              </motion.div>
+          )}
+          {!humanizerResult && !isHumanizing && !humanizerError && (
+            <div className="mt-4 p-4 border border-gray-200 dark:border-gray-700 rounded-md min-h-[80px] text-gray-600 dark:text-gray-300">
+              <p>Humanized text will appear here...</p>
             </div>
-        )}
-        {!humanizerResult && !isHumanizing && !humanizerError && ( <div className="mt-4 p-4 border border-gray-200 dark:border-gray-700 rounded-md min-h-[80px] text-gray-600 dark:text-gray-300"> <p>Humanized text will appear here...</p> </div> )}
+          )}
+        </AnimatePresence>
       </form>
-    </div>
+    </PageWrapper>
   );
 }

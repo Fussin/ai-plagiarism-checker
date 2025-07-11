@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import PageWrapper from '@/components/PageWrapper'; // Import PageWrapper
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
 
@@ -29,9 +30,10 @@ const ScanDetailModal = ({ item, onClose }: { item: ScanHistoryItem, onClose: ()
       onClick={onClose} // Close on backdrop click
     >
       <motion.div
-        initial={{ scale: 0.9, y: -20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: -20 }}
+        initial={{ scale: 0.95, opacity: 0, y: -10 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 10 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
         className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
       >
@@ -141,7 +143,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="space-y-8">
+    <PageWrapper className="space-y-8">
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Scan History</h1>
 
       {history.length === 0 ? (
@@ -192,7 +194,9 @@ export default function HistoryPage() {
           ))}
         </div>
       )}
-      {selectedScan && <ScanDetailModal item={selectedScan} onClose={() => setSelectedScan(null)} />}
-    </div>
+      <AnimatePresence>
+        {selectedScan && <ScanDetailModal item={selectedScan} onClose={() => setSelectedScan(null)} />}
+      </AnimatePresence>
+    </PageWrapper>
   );
 }
