@@ -1,7 +1,13 @@
 import unittest
 import os
-from backend.services.text_processing import extract_text
-from backend.config import settings # To use settings.UPLOAD_DIR or a dedicated test_data dir
+import io
+from backend.services.text_processing import (
+    extract_text_from_filepath,
+    extract_text_from_pdf_bytes,
+    extract_text_from_docx_bytes,
+    extract_text_from_txt_bytes
+)
+# from backend.config import settings # Not strictly needed if test_data_dir is local
 
 # For creating dummy docx and pdf files for testing
 from docx import Document as DocxDocument
@@ -80,7 +86,49 @@ class TestTextProcessing(unittest.TestCase):
         # Create a dummy unsupported file (e.g. a png renamed to .txt but with png mimetype)
         # For simplicity, we'll just pass a mimetype not handled
         with self.assertRaises(ValueError):
-            extract_text(self.txt_filepath, "image/png") # Pass txt path but wrong mimetype
+            extract_text_from_filepath(self.txt_filepath, "image/png") # Pass txt path but wrong mimetype
+
+    # --- Tests for byte-based extraction ---
+
+    def test_extract_text_from_txt_bytes(self):
+        with open(self.txt_filepath, "rb") as f:
+            txt_bytes = f.read()
+        extracted = extract_text_from_txt_bytes(txt_bytes)
+        self.assertEqual(extracted.strip(), self.test_content.strip())
+
+    def test_extract_text_from_docx_bytes(self):
+        with open(self.docx_filepath, "rb") as f:
+            docx_bytes = f.read()
+        extracted = extract_text_from_docx_bytes(docx_bytes)
+        normalized_extracted = " ".join(extracted.split())
+        normalized_original = " ".join(self.test_content.split())
+        self.assertEqual(normalized_extracted, normalized_original)
+
+    def test_extract_text_from_pdf_bytes(self):
+        with open(self.pdf_filepath, "rb") as f:
+            pdf_bytes = f.read()
+        extracted = extract_text_from_pdf_bytes(pdf_bytes)
+        normalized_extracted = " ".join(extracted.replace('\f', ' ').split())
+        normalized_original = " ".join(self.test_content.split())
+        self.assertEqual(normalized_extracted.strip(), normalized_original.strip())
+
+    def test_extract_text_from_pdf_bytes_corrupted(self):
+        corrupted_bytes = b"%PDF-1.4\n%FakeCorruptedContent\n%%EOF"
+        extracted = extract_text_from_pdf_bytes(corrupted_bytes)
+        self.assertIn("[Error extracting PDF content:", extracted)
+
+    def test_extract_text_from_docx_bytes_corrupted(self):
+        corrupted_bytes = b"PK\x03\x04ThisIsNotAZipFile" # DOCX are zips
+        extracted = extract_text_from_docx_bytes(corrupted_bytes)
+        self.assertIn("[Error extracting DOCX content:", extracted)
+
+    def test_extract_text_from_txt_bytes_bad_encoding(self):
+        # Create bytes that are not valid UTF-8 or Latin-1 easily
+        # For example, use an encoding like UTF-16 then try to decode as UTF-8/Latin-1
+        utf16_bytes = self.test_content.encode('utf-16')
+        extracted = extract_text_from_txt_bytes(utf16_bytes) # This will likely hit the final exception
+        self.assertIn("[Error decoding TXT content:", extracted)
+
 
 if __name__ == '__main__':
     # This allows running tests directly from this file

@@ -47,8 +47,25 @@ class TestAIServices(unittest.IsolatedAsyncioTestCase): # Use IsolatedAsyncioTes
         self.assertEqual(humanized, "This is a beautifully rephrased human text.")
         ai_services.async_client.chat.completions.create.assert_called_once()
         call_args = ai_services.async_client.chat.completions.create.call_args
-        self.assertEqual(call_args.kwargs['model'], "gpt-3.5-turbo") # Default model
+        self.assertEqual(call_args.kwargs['model'], "gpt-4-turbo") # Check new default model
         self.assertIn(original_text, call_args.kwargs['messages'][1]['content'])
+
+
+    async def test_humanize_text_with_gpt_async_custom_model(self):
+        mock_completion_choice = AsyncMock()
+        mock_completion_choice.message.content = "Custom model rephrased text."
+        mock_completion_response = AsyncMock()
+        mock_completion_response.choices = [mock_completion_choice]
+        ai_services.async_client.chat.completions.create = AsyncMock(return_value=mock_completion_response)
+
+        original_text = "Original text for custom model."
+        custom_model_name = "gpt-3.5-turbo-instruct" # Example of specifying a different model
+        humanized = await ai_services.humanize_text_with_gpt_async(original_text, model=custom_model_name)
+
+        self.assertEqual(humanized, "Custom model rephrased text.")
+        ai_services.async_client.chat.completions.create.assert_called_once()
+        call_args = ai_services.async_client.chat.completions.create.call_args
+        self.assertEqual(call_args.kwargs['model'], custom_model_name)
 
 
     async def test_humanize_text_with_gpt_async_empty_input(self):

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, checker, history, ai_tools # Import the new ai_tools router
+from .routers import auth, checker, history, ai_tools, preview_api # Import the new preview_api router
 from .config import settings
 import os
 
@@ -33,7 +33,8 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(checker.router)
 app.include_router(history.router)
-app.include_router(ai_tools.router) # Include the AI tools router
+app.include_router(ai_tools.router)
+app.include_router(preview_api.router) # Include the new preview_api router
 
 @app.get("/")
 async def root():

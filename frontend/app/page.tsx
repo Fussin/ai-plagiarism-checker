@@ -31,32 +31,31 @@ export default function HomePage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [currentScanType, setCurrentScanType] = useState<string | null>(null);
+  const [currentScanType, setCurrentScanType] = useState<string | null>(null); // Used for display and button states
 
   const [humanizerInput, setHumanizerInput] = useState('');
   const [humanizerResult, setHumanizerResult] = useState<HumanizerResult | null>(null);
   const [isHumanizing, setIsHumanizing] = useState(false);
   const [humanizerError, setHumanizerError] = useState<string | null>(null);
 
-  // State for file input feedback
   const [fileSelectedFeedback, setFileSelectedFeedback] = useState<string | null>(null);
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>, fileType: string) => {
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>, fileTypeKey: string) => {
     if (event.target.files && event.target.files[0]) {
-      setFiles(prev => ({ ...prev, [fileType]: event.target.files![0] }));
-      setFileSelectedFeedback(fileType);
-      setTimeout(() => setFileSelectedFeedback(null), 1500); // Reset feedback after 1.5s
+      setFiles(prev => ({ ...prev, [fileTypeKey]: event.target.files![0] }));
+      setFileSelectedFeedback(fileTypeKey);
+      setTimeout(() => setFileSelectedFeedback(null), 1500);
     } else {
-      setFiles(prev => ({ ...prev, [fileType]: null }));
+      setFiles(prev => ({ ...prev, [fileTypeKey]: null }));
     }
   };
 
-  const saveHistory = async (contentType: string, resultData: ScanResult, fileName?: string, inputSnippet?: string) => {
+  const saveHistory = async (contentTypeForHistory: string, resultData: ScanResult, fileName?: string, inputSnippet?: string) => {
     if (!user || !token) return;
     const historyPayload = {
-      content_type: contentType,
+      content_type: contentTypeForHistory, // Use the specific type for history
       file_name: fileName,
-      input_snippet: inputSnippet ? inputSnippet.substring(0, 250) : `Scan of ${contentType}`,
+      input_snippet: inputSnippet ? inputSnippet.substring(0, 250) : `Scan of ${contentTypeForHistory}`,
       originality_score: resultData.originality_score,
       matched_sources: resultData.matched_sources,
       rewrite_suggestions: resultData.rewrite_suggestions,
@@ -78,7 +77,8 @@ export default function HomePage() {
   const handleTextSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!textInput.trim()) { setScanError("Please enter some text to check."); return; }
-    setIsScanning(true); setScanError(null); setScanResult(null); setCurrentScanType("Text Input");
+    setCurrentScanType("Text Input"); // Set scan type for UI feedback
+    setIsScanning(true); setScanError(null); setScanResult(null);
     try {
       const response = await fetch(`${API_BASE_URL}/check/text`, {
         method: 'POST',
@@ -94,11 +94,12 @@ export default function HomePage() {
     } finally { setIsScanning(false); }
   };
 
-  const handleFileSubmit = async (fileTypeKey: string, endpoint: string, scanContentType: string) => {
+  const handleFileSubmit = async (fileTypeKey: string, endpoint: string, historyContentType: string) => {
     const file = files[fileTypeKey];
-    if (!file) { setScanError(`Please select a ${scanContentType.split('_')[0]} file.`); return; }
-    // Use a more specific currentScanType for file uploads to differentiate loading states
-    setCurrentScanType(`${scanContentType}_${file.name}`);
+    if (!file) { setScanError(`Please select a ${fileTypeKey.replace('File','')} file.`); return; }
+
+    const scanTypeForDisplay = `${fileTypeKey.replace('File','')} File: ${file.name}`;
+    setCurrentScanType(scanTypeForDisplay); // For UI feedback and button state
     setIsScanning(true); setScanError(null); setScanResult(null);
 
     const formData = new FormData();
@@ -112,9 +113,10 @@ export default function HomePage() {
       const data = await response.json();
       if (response.ok) {
         setScanResult(data);
-        if (user) await saveHistory(scanContentType, data, file.name, `Content of ${file.name}`);
-      } else { setScanError(data.detail || `Failed to check ${scanContentType.split('_')[0]} file.`); }
-    } catch (err) { setScanError(`An error occurred while checking ${scanContentType.split('_')[0]} file.`); console.error(err);
+        // Use historyContentType for saving, which is more specific (e.g., "file_pdf")
+        if (user) await saveHistory(historyContentType, data, file.name, `Content of ${file.name}`);
+      } else { setScanError(data.detail || `Failed to check ${fileTypeKey.replace('File','')} file.`); }
+    } catch (err) { setScanError(`An error occurred while checking ${fileTypeKey.replace('File','')} file.`); console.error(err);
     } finally { setIsScanning(false); }
   };
 
@@ -152,10 +154,9 @@ export default function HomePage() {
   const greenButtonClass = `${buttonBaseClass} bg-green-500 hover:bg-green-600`;
   const purpleButtonClass = `${buttonBaseClass} bg-purple-500 hover:bg-purple-600`;
 
-  // Dynamic class for file input based on selection feedback
-  const fileInputDivClass = (fileType: string) =>
+  const fileInputDivClass = (fileTypeKey: string) =>
     `p-4 border-2 border-dashed rounded-lg transition-colors duration-300 ease-in-out ${
-      fileSelectedFeedback === fileType
+      fileSelectedFeedback === fileTypeKey
         ? 'border-green-500 bg-green-50 dark:bg-green-900/30'
         : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
     }`;
@@ -182,21 +183,21 @@ export default function HomePage() {
             <label htmlFor="text-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Text Document (PDF, DOCX, TXT)</label>
             <input type="file" id="text-file-upload" onChange={(e) => handleFileChange(e, 'textFile')} accept=".pdf,.doc,.docx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800 disabled:opacity-50" disabled={isScanning}/>
             <button onClick={() => handleFileSubmit('textFile', '/check/file', 'file_text')} disabled={isScanning || !files.textFile} className={`${greenButtonClass} w-full`}>
-              {isScanning && currentScanType === `file_text_${files.textFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Text File'}
+              {isScanning && currentScanType === `textFile File: ${files.textFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Text File'}
             </button>
           </div>
           <div className={fileInputDivClass('imageFile')}>
             <label htmlFor="image-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Image (JPG, PNG, GIF)</label>
             <input type="file" id="image-file-upload" onChange={(e) => handleFileChange(e, 'imageFile')} accept="image/jpeg,image/png,image/gif" className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800 disabled:opacity-50" disabled={isScanning}/>
             <button onClick={() => handleFileSubmit('imageFile', '/check/image', 'file_image')} disabled={isScanning || !files.imageFile} className={`${greenButtonClass} w-full`}>
-              {isScanning && currentScanType === `file_image_${files.imageFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Image File'}
+              {isScanning && currentScanType === `imageFile File: ${files.imageFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Image File'}
             </button>
           </div>
           <div className={fileInputDivClass('videoFile')}>
             <label htmlFor="video-file-upload" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Video (MP4)</label>
             <input type="file" id="video-file-upload" onChange={(e) => handleFileChange(e, 'videoFile')} accept="video/mp4" className="w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 dark:file:bg-blue-900 file:text-blue-700 dark:file:text-blue-300 hover:file:bg-blue-100 dark:hover:file:bg-blue-800 disabled:opacity-50" disabled={isScanning}/>
             <button onClick={() => handleFileSubmit('videoFile', '/check/video', 'file_video')} disabled={isScanning || !files.videoFile} className={`${greenButtonClass} w-full`}>
-             {isScanning && currentScanType === `file_video_${files.videoFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Video File'}
+             {isScanning && currentScanType === `videoFile File: ${files.videoFile?.name}` ? <><Spinner size="w-4 h-4 mr-2" /> Checking...</> : 'Check Video File'}
             </button>
           </div>
         </div>
@@ -212,7 +213,7 @@ export default function HomePage() {
             exit={{ opacity: 0, height: 0, y: 20 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
           >
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-white">Scan Results {currentScanType ? `for ${currentScanType.replace(/_/g, " ")}` : ''}</h2>
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800 dark:text-white">Scan Results {currentScanType ? `for ${currentScanType.replace(/_/g, " ").replace(/file /i, 'File: ')}` : ''}</h2>
             {isScanning && <div className="flex items-center text-indigo-600 dark:text-indigo-400"><Spinner size="w-5 h-5 mr-2" color="text-indigo-600 dark:text-indigo-400"/>Scanning, please wait...</div>}
             {scanError && <p className="text-red-500 dark:text-red-400">Error: {scanError}</p>}
             {scanResult && !isScanning && (
@@ -234,7 +235,7 @@ export default function HomePage() {
           {isHumanizing ? <><Spinner size="w-5 h-5 mr-2" /> Humanizing...</> : 'Humanize Text'}
         </button>
         <AnimatePresence>
-          {isHumanizing && !humanizerError && !humanizerResult && ( // Show processing only when no error/result yet
+          {isHumanizing && !humanizerError && !humanizerResult && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-2 flex items-center text-purple-600 dark:text-purple-400">
               <Spinner size="w-5 h-5 mr-2" color="text-purple-600 dark:text-purple-400"/> Processing...
             </motion.div>
@@ -242,7 +243,7 @@ export default function HomePage() {
           {humanizerError && (
             <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-2 text-red-500 dark:text-red-400">Error: {humanizerError}</motion.p>
           )}
-          {humanizerResult && !isHumanizing && ( // Show result only when not actively humanizing (i.e., after completion)
+          {humanizerResult && !isHumanizing && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y:10 }}
                 className="mt-4 p-4 border border-gray-200 dark:border-gray-700 rounded-md min-h-[80px]"

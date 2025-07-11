@@ -113,10 +113,21 @@ from datetime import datetime
 
 class TextHumanizationRequest(BaseModel):
     text: str
-    model: Optional[str] = "gpt-3.5-turbo" # Allow model selection, default to cost-effective one
+    model: Optional[str] = "gpt-4-turbo" # Defaulting to a GPT-4 class model
 
 class TextHumanizationResponse(BaseModel):
     original_text: str
     humanized_text: str | None
     model_used: str
     error: Optional[str] = None
+
+# --- Preview API Schemas ---
+
+class FilePreviewItem(BaseModel):
+    filename: str
+    content_type: str
+    preview: Optional[str] = None # First 500 chars for text, or type message
+    error: Optional[str] = None
+
+class FilePreviewResponse(BaseModel):
+    results: List[FilePreviewItem]

@@ -89,7 +89,7 @@ else:
     print("OPENAI_API_KEY not found for AsyncOpenAI client.")
 
 
-async def humanize_text_with_gpt_async(text_to_humanize: str, model: str = "gpt-3.5-turbo") -> str | None:
+async def humanize_text_with_gpt_async(text_to_humanize: str, model: str = "gpt-4-turbo") -> str | None: # Updated default model
     if not async_client:
         print("AsyncOpenAI client not initialized. Cannot humanize text.")
         # Could raise an HTTPException here to inform the client properly
