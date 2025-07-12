@@ -11,26 +11,46 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { signup, isLoading: authIsLoading, user } = useAuth();
   const router = useRouter();
 
+  const validateForm = () => {
+    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
+      setFormError("All fields are required.");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setFormError("Please enter a valid email address.");
+      return false;
+    }
+    if (password.length < 8) {
+      setFormError("Password must be at least 8 characters long.");
+      return false;
+    }
+    if (password !== confirmPassword) {
+      setFormError("Passwords do not match.");
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    setFormError(null);
+    if (!validateForm()) {
       return;
     }
-    setError(null);
     setIsSubmitting(true);
 
-    const success = await signup(email, password);
+    const result = await signup(email, password);
 
-    if (success) {
+    if (result.success) {
       router.push('/');
     } else {
-      setError('Signup failed. The email might already be registered or an error occurred.');
+      setFormError(result.error || 'Signup failed. The email might already be registered.');
     }
     setIsSubmitting(false);
   };
@@ -50,7 +70,7 @@ export default function RegisterPage() {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
         <div className="w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg">
           <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white">Create Account</h1>
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          {formError && <p className="text-red-500 text-sm text-center bg-red-100 dark:bg-red-900/30 p-2 rounded-md">{formError}</p>}
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label
@@ -88,7 +108,7 @@ export default function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-                placeholder="••••••••"
+                placeholder="At least 8 characters"
                 disabled={isSubmitting}
               />
             </div>

@@ -10,22 +10,38 @@ import PageWrapper from '@/components/PageWrapper';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, isLoading: authIsLoading, user } = useAuth();
   const router = useRouter();
 
+  const validateForm = () => {
+    if (!email.trim() || !password.trim()) {
+      setFormError("Both email and password are required.");
+      return false;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setFormError("Please enter a valid email address.");
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError(null);
+    setFormError(null);
+    if (!validateForm()) {
+      return;
+    }
     setIsSubmitting(true);
 
-    const success = await login(email, password);
+    const result = await login(email, password);
 
-    if (success) {
+    if (result.success) {
       router.push('/');
     } else {
-      setError('Login failed. Please check your email and password.');
+      setFormError(result.error || 'Login failed. Please check your credentials.');
     }
     setIsSubmitting(false);
   };
@@ -45,7 +61,7 @@ export default function LoginPage() {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
         <div className="w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg">
           <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white">Login</h1>
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+          {formError && <p className="text-red-500 text-sm text-center bg-red-100 dark:bg-red-900/30 p-2 rounded-md">{formError}</p>}
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
               <label

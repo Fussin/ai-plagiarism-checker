@@ -1,7 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter } from 'next/navigation'; // Using App Router's navigation
+import { useRouter } from 'next/navigation';
+import { useToast } from './ToastContext'; // Import useToast
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
 
@@ -16,10 +17,10 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (emailOrFormData: string | FormData, password?: string) => Promise<boolean>;
-  signup: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  fetchUser: () => Promise<void>; // Manually trigger user fetch
+  fetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,8 +28,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // Start true to check initial auth status
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const { addToast } = useToast(); // Use the toast context
 
   useEffect(() => {
     const storedToken = localStorage.getItem('authToken');
@@ -68,6 +70,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setToken(null);
         setUser(null);
         // Optionally redirect to login if on a protected page, handled by page components
+        addToast('Session expired. Please log in again.', 'error');
       }
     } catch (error) {
       console.error('Error fetching user:', error);
@@ -77,48 +80,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const login = async (emailOrFormData: string | FormData, password?: string): Promise<boolean> => {
+  const login = async (email: string, password?: string) => {
     setIsLoading(true);
-    let body: URLSearchParams | string;
-    let headers: HeadersInit = {};
-
-    if (emailOrFormData instanceof FormData) { // For direct form data submission (not used in this example)
-        body = new URLSearchParams(emailOrFormData as any);
-        headers['Content-Type'] = 'application/x-www-form-urlencoded';
-    } else { // For email/password string pair
-        const formData = new URLSearchParams();
-        formData.append('username', emailOrFormData as string);
-        formData.append('password', password!);
-        body = formData.toString();
-        headers['Content-Type'] = 'application/x-www-form-urlencoded';
-    }
+    const formData = new URLSearchParams();
+    formData.append('username', email);
+    formData.append('password', password!);
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
-        headers: headers,
-        body: body,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString(),
       });
       const data = await response.json();
       if (response.ok) {
         setToken(data.access_token);
         localStorage.setItem('authToken', data.access_token);
-        await fetchUser(); // Fetch user details after successful login
-        setIsLoading(false);
-        return true;
+        await fetchUser();
+        addToast('Login successful!', 'success');
+        return { success: true };
       } else {
-        console.error('Login failed:', data.detail);
-        setIsLoading(false);
-        return false;
+        const errorMsg = data.detail || "Login failed. Please check your credentials.";
+        addToast(errorMsg, 'error');
+        return { success: false, error: errorMsg };
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Login network error:', error);
+      addToast('A network error occurred during login.', 'error');
+      return { success: false, error: 'A network error occurred.' };
+    } finally {
       setIsLoading(false);
-      return false;
     }
   };
 
-  const signup = async (email: string, password: string): Promise<boolean> => {
+  const signup = async (email: string, password: string) => {
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/auth/signup`, {
@@ -130,18 +125,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (response.ok) {
         setToken(data.access_token);
         localStorage.setItem('authToken', data.access_token);
-        await fetchUser(); // Fetch user details after successful signup
-        setIsLoading(false);
-        return true;
+        await fetchUser();
+        addToast('Signup successful! You are now logged in.', 'success');
+        return { success: true };
       } else {
-        console.error('Signup failed:', data.detail);
-        setIsLoading(false);
-        return false;
+        const errorMsg = data.detail || 'Signup failed. Please try again.';
+        addToast(errorMsg, 'error');
+        return { success: false, error: errorMsg };
       }
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('Signup network error:', error);
+      addToast('A network error occurred during signup.', 'error');
+      return { success: false, error: 'A network error occurred.' };
+    } finally {
       setIsLoading(false);
-      return false;
     }
   };
 
@@ -149,7 +146,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setToken(null);
     localStorage.removeItem('authToken');
-    router.push('/login'); // Redirect to login page on logout
+    addToast('You have been logged out.', 'info');
+    router.push('/login');
   };
 
   return (

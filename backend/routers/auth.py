@@ -61,14 +61,23 @@ async def signup(user_in: models.UserCreateSchema, db: Session = Depends(get_db)
 
 @router.post("/login", response_model=models.Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user_in_db = get_user_by_email(db, email=form_data.username) # form_data.username is the email
+    user_in_db = get_user_by_email(db, email=form_data.username)
 
-    if not user_in_db or not verify_password(form_data.password, user_in_db.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # Refined error handling for clearer internal logging/debugging
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Incorrect email or password", # Generic message for the client
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if not user_in_db:
+        print(f"Login attempt failed: User '{form_data.username}' not found.") # For server logs
+        raise credentials_exception
+
+    if not verify_password(form_data.password, user_in_db.hashed_password):
+        print(f"Login attempt failed: Incorrect password for user '{form_data.username}'.") # For server logs
+        raise credentials_exception
+
     if not user_in_db.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
 
