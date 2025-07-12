@@ -23,12 +23,13 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
     *   "Export Results" button allows downloading a text summary of the current scan.
 *   **👤 User Authentication & Personalized Experience**:
     *   Secure user registration and login system using JWT-based authentication.
-    *   User-specific scan history dashboard with both Card and Table views to review past checks and their detailed results.
-    *   Persistent user and history data stored in a database (SQLite by default).
+*   **Tiered Pricing & Usage Limits**: The backend now enforces feature gates and usage limits based on user subscription plans (Free, Pro Basic, etc.). This includes monthly word counts, file size limits, and feature access for history and report downloads.
+*   **User-specific scan history dashboard** with Card and Table views to review past checks.
+*   Persistent user, history, and usage data stored in a database (SQLite by default).
 *   **✨ GPT-Powered Text Humanization**:
-    *   An AI tool to rephrase user-provided text using an OpenAI GPT model (defaulting to `gpt-4-turbo`), making it sound more natural and human-written. Requires an OpenAI API key.
+    *   An AI tool to rephrase user-provided text using an OpenAI GPT model (defaulting to `gpt-4-turbo`). Usage is metered based on the user's plan. Requires an OpenAI API key.
 *   **🤖 FastAPI Backend**:
-    *   Serves dedicated endpoints for plagiarism checking (text, file, image, video), user authentication, scan history, and AI tools (like text humanization).
+    *   Serves dedicated endpoints for plagiarism checking, authentication, scan history, AI tools, and a mock admin tool for setting user plans.
     *   Includes a multi-file preview endpoint (`/api/check`) that extracts text from various document types (via byte stream processing) and returns quick previews.
     *   Modular services for text processing (filepath and byte-based), NLP, image analysis, and video processing.
 *   **🧪 Testing Setup**:

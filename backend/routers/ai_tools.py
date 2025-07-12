@@ -1,30 +1,44 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 from typing import Optional
 
-from backend import models # Pydantic schemas
-from backend.services.ai_services import humanize_text_with_gpt_async # The async version
-from backend.dependencies import get_current_active_user # Optional: make this a protected endpoint
+from backend import models
+from backend.database import get_db
+from backend.services import ai_services, usage_service, text_processing
+from backend.dependencies import get_current_active_user
 
 router = APIRouter(
     prefix="/ai",
     tags=["ai_tools"],
-    # dependencies=[Depends(get_current_active_user)] # Uncomment if this should be a protected feature
+    dependencies=[Depends(get_current_active_user)] # This is now a protected feature
 )
 
 @router.post("/humanize-text", response_model=models.TextHumanizationResponse)
 async def humanize_text_endpoint(
     request: models.TextHumanizationRequest,
-    # current_user: models.UserDB = Depends(get_current_active_user) # Uncomment if protected
+    db: Session = Depends(get_db),
+    current_user: models.UserDB = Depends(get_current_active_user)
 ):
     """
-    Receives text and returns a "humanized" version using an LLM.
+    Receives text and returns a "humanized" version using an LLM,
+    respecting the user's plan limits.
     """
-    if not request.text.strip():
+    usage = usage_service.get_or_create_usage_record(db, current_user)
+    word_count = text_processing.count_words(request.text)
+
+    if word_count == 0:
         return models.TextHumanizationResponse(
             original_text=request.text,
-            humanized_text=request.text, # Return original if empty
+            humanized_text=request.text,
             model_used=request.model,
             error="Input text was empty."
+        )
+
+    # Check if user has enough quota for this action
+    if not usage_service.check_humanizer_limit(current_user, usage, word_count):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You have exceeded your monthly limit for the text humanizer. Please upgrade your plan."
         )
 
     try:
@@ -33,13 +47,10 @@ async def humanize_text_endpoint(
         if humanized_text is None:
             # The service function now raises HTTPExceptions for specific API errors,
             # so this part might only be reached for very generic None returns not covered by those.
-            # However, it's good practice to handle it.
-             return models.TextHumanizationResponse(
-                original_text=request.text,
-                humanized_text=None,
-                model_used=request.model,
-                error="Failed to humanize text. Service returned no content."
-            )
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to humanize text. Service returned no content.")
+
+        # If successful, update usage
+        usage_service.update_usage(db, usage, humanizer_uses=word_count)
 
         return models.TextHumanizationResponse(
             original_text=request.text,

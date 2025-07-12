@@ -52,6 +52,11 @@ async def signup(user_in: models.UserCreateSchema, db: Session = Depends(get_db)
     db.commit()
     db.refresh(new_user)
 
+    # Also create an initial usage record for the new user
+    initial_usage = models.UsageDB(user_id=new_user.id)
+    db.add(initial_usage)
+    db.commit()
+
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": new_user.email}, expires_delta=access_token_expires

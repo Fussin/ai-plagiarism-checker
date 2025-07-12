@@ -10,19 +10,33 @@ from backend.database import Base # Import Base from database.py
 
 # --- SQLAlchemy Models ---
 
-class UserDB(Base): # Renamed to UserDB to distinguish from Pydantic User schema
+class UserDB(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
-    # Add any other fields like created_at, updated_at
-    # created_at = Column(DateTime(timezone=True), server_default=func.now())
-    # updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    plan = Column(String, default="free", nullable=False) # free, pro_basic, pro_advanced, enterprise
+    subscription_status = Column(String, default="active", nullable=False) # active, inactive, past_due
 
-    # Relationship to ScanHistory (one-to-many)
     scan_history = relationship("ScanHistoryDB", back_populates="owner")
+    usage = relationship("UsageDB", back_populates="user", uselist=False) # one-to-one-ish (one per month, but simple for now)
+
+
+class UsageDB(Base):
+    __tablename__ = "usage"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True) # One usage record per user for simplicity
+    # For monthly tracking, a composite key of (user_id, year_month) would be better.
+    # Sticking to a simpler model for now as requested.
+    # year_month = Column(String, nullable=False) # e.g., "2024-07"
+    words_scanned = Column(Integer, default=0, nullable=False)
+    humanizer_uses = Column(Integer, default=0, nullable=False)
+    last_reset = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("UserDB", back_populates="usage")
 
 
 class ScanHistoryDB(Base):
@@ -55,13 +69,23 @@ class UserCreateSchema(UserBaseSchema):
 class UserLoginSchema(UserBaseSchema):
     password: str
 
+class UsageSchema(BaseModel):
+    words_scanned: int
+    humanizer_uses: int
+    last_reset: datetime
+
+    class Config:
+        from_attributes = True
+
 class UserSchema(UserBaseSchema):
     id: int
     is_active: bool
-    # scan_history: List['ScanHistorySchema'] = [] # Avoid circular dependency if ScanHistorySchema defined later
+    plan: str
+    subscription_status: str
+    usage: Optional[UsageSchema] = None
 
     class Config:
-        from_attributes = True # Pydantic v2 (formerly orm_mode)
+        from_attributes = True
 
 # Token Schemas (remain the same)
 class Token(BaseModel):
@@ -75,10 +99,11 @@ class TokenData(BaseModel):
 class TextCheckRequest(BaseModel): # Remains the same
     text: str
 
-class PlagiarismResultSchema(BaseModel): # Changed suffix to Schema
+class PlagiarismResultSchema(BaseModel):
     originality_score: float
     matched_sources: List[str] = []
     rewrite_suggestions: List[str] = []
+    can_download_report: bool = False # New field for plan enforcement
 
     class Config:
         from_attributes = True

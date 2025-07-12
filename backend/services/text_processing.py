@@ -81,3 +81,13 @@ def extract_text_from_txt_bytes(file_bytes: bytes) -> str:
 # To maintain compatibility with existing checker.py:
 extract_text = extract_text_from_filepath
 # This way, checker.py doesn't need to change its call to text_processing.extract_text
+
+# --- Utility Functions ---
+
+def count_words(text: str) -> int:
+    """
+    A simple word counter. Splits text by whitespace.
+    """
+    if not text or not text.strip():
+        return 0
+    return len(text.split())
