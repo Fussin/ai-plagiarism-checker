@@ -14,6 +14,7 @@ export default function HeaderNav() {
       </Link>
       <div className="flex items-center space-x-4">
         <Link href="/" className="hover:text-blue-200 dark:hover:text-blue-300">Home</Link>
+        <Link href="/pricing" className="hover:text-blue-200 dark:hover:text-blue-300">Pricing</Link>
         {isLoading ? (
           <div className="h-5 w-20 bg-gray-500 dark:bg-gray-700 animate-pulse rounded-md"></div> // Placeholder for loading state
         ) : user ? (

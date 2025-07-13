@@ -23,7 +23,9 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
     *   "Export Results" button allows downloading a text summary of the current scan.
 *   **👤 User Authentication & Personalized Experience**:
     *   Secure user registration and login system using JWT-based authentication.
-*   **Tiered Pricing & Usage Limits**: The backend now enforces feature gates and usage limits based on user subscription plans (Free, Pro Basic, etc.). This includes monthly word counts, file size limits, and feature access for history and report downloads.
+*   **Tiered Pricing & Usage Limits**:
+    *   A dedicated `/pricing` page displays plan features in both card and table formats.
+    *   The backend enforces feature gates and usage limits based on user subscription plans (Free, Pro Basic, etc.). This includes monthly word counts, file size limits, and feature access for history and report downloads.
 *   **User-specific scan history dashboard** with Card and Table views to review past checks.
 *   Persistent user, history, and usage data stored in a database (SQLite by default).
 *   **✨ GPT-Powered Text Humanization**:
@@ -49,7 +51,7 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
     *   Jest & React Testing Library (for component testing)
 *   **Backend**:
     *   Python 3.x (project developed with 3.11+)
-    *   FastAPI (for API development)
+    *   FastAPI
     *   Uvicorn (ASGI server)
     *   SQLAlchemy (ORM for database interaction)
     *   Alembic (for database migrations)
@@ -71,7 +73,7 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
 *   `npm` (or `yarn`/`pnpm`)
 *   Python 3.8+ (project developed with 3.11+)
 *   `pip` (Python package installer)
-*   **OpenAI API Key**: Required *only* for the Text Humanization feature. If you don't provide it, other features will still work.
+*   **OpenAI API Key**: Required *only* for the Text Humanization feature.
 
 ### Backend Setup
 
@@ -90,47 +92,26 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
     ```
     *Note: This installation includes `torch`, which can be large. If you encounter "No space left on device" errors in very constrained environments, ensure adequate disk space.*
 4.  **Set up Environment Variables (Backend)**:
-    *   Create a `.env` file in the **project root directory** (the same level as `frontend` and `backend` folders).
-    *   **Database URL (Optional for Default SQLite)**: The application defaults to a SQLite database (`test.db`) created in the project root. To use a different database (e.g., PostgreSQL), set `DATABASE_URL`:
-        ```env
-        # Example for PostgreSQL:
-        # DATABASE_URL="postgresql://youruser:yourpassword@localhost:5432/yourdatabase"
-        ```
-    *   **OpenAI API Key (Optional)**: If you plan to use the Text Humanization feature, add your key:
-        ```env
-        OPENAI_API_KEY="your_openai_api_key_here"
-        ```
-    *   **JWT Secret Key (Recommended for Production)**: While a default is provided in `backend/config.py`, you should override it for production:
-        ```env
-        SECRET_KEY="your_very_strong_random_secret_key_for_jwt"
-        ```
+    *   Create a `.env` file in the **project root directory**.
+    *   **Database URL (Optional)**: Defaults to a SQLite database (`test.db`) in the project root. To use PostgreSQL, set `DATABASE_URL="postgresql://user:pass@host:port/dbname"`.
+    *   **OpenAI API Key (Optional)**: Add `OPENAI_API_KEY="your_openai_api_key_here"` to use the Text Humanization feature.
+    *   **JWT Secret Key (Recommended)**: Override the default by setting `SECRET_KEY="your_very_strong_random_secret_key_for_jwt"`.
 5.  **Apply Database Migrations:**
     *   Navigate to the `backend` directory: `cd backend`
-    *   Run Alembic migrations to create database tables: `alembic upgrade head`
+    *   Run Alembic migrations: `alembic upgrade head`
     *   Navigate back to project root: `cd ..`
-    *(If the `alembic` command is not found directly, try `python -m alembic upgrade head` from within the `backend` directory after activating the virtual environment).*
+    *(If `alembic` is not found, try `python -m alembic upgrade head` from the `backend` directory).*
 6.  **Run the FastAPI Backend Server:**
     ```bash
     uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
     ```
-    The backend will be available at `http://127.0.0.1:8000`.
 
 ### Frontend Setup (Next.js)
 
-1.  **Navigate to the `frontend` directory:**
-    ```bash
-    cd frontend
-    ```
-2.  **Install Node.js dependencies:**
-    ```bash
-    npm install
-    ```
-3.  **Set up Environment Variables (Frontend - Optional for local default)**:
-    *   The frontend defaults to connecting to the backend at `http://127.0.0.1:8000`.
-    *   If your backend runs on a different URL, create a `.env.local` file in the `frontend` directory:
-        ```env
-        NEXT_PUBLIC_API_BASE_URL=http://your_backend_api_url
-        ```
+1.  **Navigate to the `frontend` directory:** `cd frontend`
+2.  **Install Node.js dependencies:** `npm install`
+3.  **Set up Environment Variables (Frontend - Optional)**:
+    *   If your backend runs on a different URL, create a `.env.local` file in the `frontend` directory with: `NEXT_PUBLIC_API_BASE_URL=http://your_backend_api_url`
 4.  **Run the Next.js Development Server:**
     ```bash
     npm run dev
@@ -140,34 +121,24 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
 ## How to Use
 
 1.  **Ensure both backend and frontend servers are running.**
-2.  **Access the Application**: Open `http://localhost:3000` in your web browser.
-3.  **Theme Toggle**: Use the sun/moon icon in the header to switch between light and dark modes.
-4.  **Authentication**:
-    *   **Register**: Create a new account. The form includes client-side validation for email format and password length.
-    *   **Login**: Log in with your credentials. Success and error messages are shown as toast notifications.
-    *   The header will update to show your email and a "Logout" button. Login is required to save scan history and view the History page.
-5.  **Checking Content (Home Page)**:
-    *   Use the respective sections to check text, text files, images, or videos. Buttons provide loading state feedback.
-    *   Scan results will appear with animations. Click "Export Results" to download a text summary.
-6.  **Text Humanization (Home Page)**:
-    *   Paste text and click "Humanize Text". The rephrased text will appear below.
-7.  **Scan History (History Page)**:
-    *   Navigate to the "History" page (requires login).
-    *   Use the view toggle icons to switch between a responsive Card layout and a compact Table layout.
-    *   Click "View Details" on any item to see the full report in a modal.
-8.  **Multi-File Preview API Endpoint (For Programmatic Use)**:
-    *   The `POST /api/check` endpoint can be used by other tools/scripts to get a quick text preview from multiple files at once.
+2.  **Access the Application**: Open `http://localhost:3000`.
+3.  **Authentication**: Register for a new account or log in. Login is required to save and view scan history.
+4.  **View Pricing**: Navigate to the "Pricing" page from the header to compare plan features.
+5.  **Checking Content (Home Page)**: Use the forms to check text, upload documents, images, or videos. Results appear dynamically below.
+6.  **Text Humanization (Home Page)**: Use the GPT-powered tool to rephrase text (requires API key).
+7.  **Scan History (History Page)**: View past scans in a card or table layout. Click "View Details" for a full report in a modal.
+8.  **Multi-File Preview API (For Programmatic Use)**: The `POST /api/check` endpoint can be used by other tools to get quick text previews from multiple files.
 
 ## Running Tests
 
 *   **Backend**: Navigate to the `backend` directory and run `python -m unittest discover -s tests`.
 *   **Frontend**: Navigate to the `frontend` directory and run `npm test`.
-    *   *Note: Frontend test execution may fail in some constrained sandbox environments due to issues with Jest's module resolution for `ts-node` or `next/jest`. The configuration is standard and should work in a local development setup.*
+    *   *Note: Frontend test execution may fail in some sandboxed environments due to module resolution issues. The configuration is standard and should work in a local setup.*
 
 ## Current Limitations & Mocked Components
-(This section remains largely the same as the previous version, detailing mocked reverse image search, placeholder audio transcription, and focus on self-similarity for text.)
+(This section remains largely the same, detailing mocked reverse image search, placeholder audio transcription, and focus on self-similarity.)
 
 ## Deployment Considerations (Production Environment)
-(This section remains largely the same as the previous version, detailing production-ready practices.)
+(This section remains largely the same, detailing production-ready practices.)
 
 This README provides a comprehensive guide to understanding, setting up, and using the AI Plagiarism Web App.
