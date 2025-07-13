@@ -7,41 +7,48 @@ import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import PageWrapper from '@/components/PageWrapper';
 
+const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
+  const [errors, setErrors] = useState({ email: '', password: '', form: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, isLoading: authIsLoading, user } = useAuth();
   const router = useRouter();
 
-  const validateForm = () => {
-    if (!email.trim() || !password.trim()) {
-      setFormError("Both email and password are required.");
-      return false;
+  const handleValidation = (field: 'email' | 'password') => {
+    let errorMsg = '';
+    switch (field) {
+      case 'email':
+        if (!email) errorMsg = "Email is required.";
+        else if (!validateEmail(email)) errorMsg = "Please enter a valid email address.";
+        break;
+      case 'password':
+        if (!password) errorMsg = "Password is required.";
+        break;
     }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setFormError("Please enter a valid email address.");
-      return false;
-    }
-    return true;
+    setErrors(prev => ({ ...prev, [field]: errorMsg }));
+    return !errorMsg;
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFormError(null);
-    if (!validateForm()) {
+    setErrors(prev => ({ ...prev, form: '' }));
+
+    const isEmailValid = handleValidation('email');
+    const isPasswordValid = handleValidation('password');
+
+    if (!isEmailValid || !isPasswordValid) {
       return;
     }
+
     setIsSubmitting(true);
-
     const result = await login(email, password);
-
     if (result.success) {
       router.push('/');
     } else {
-      setFormError(result.error || 'Login failed. Please check your credentials.');
+      setErrors(prev => ({ ...prev, form: result.error || 'Login failed. Please check your credentials.' }));
     }
     setIsSubmitting(false);
   };
@@ -61,8 +68,8 @@ export default function LoginPage() {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
         <div className="w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg">
           <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white">Login</h1>
-          {formError && <p className="text-red-500 text-sm text-center bg-red-100 dark:bg-red-900/30 p-2 rounded-md">{formError}</p>}
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          {errors.form && <p className="text-red-500 text-sm text-center bg-red-100 dark:bg-red-900/30 p-2 rounded-md">{errors.form}</p>}
+          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div>
               <label
                 htmlFor="email"
@@ -74,14 +81,13 @@ export default function LoginPage() {
                 id="email"
                 name="email"
                 type="email"
-                autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-                placeholder="you@example.com"
-                disabled={isSubmitting}
+                onBlur={() => handleValidation('email')}
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white ${errors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
               />
+              {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
             </div>
             <div>
               <label
@@ -94,29 +100,21 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-                placeholder="••••••••"
-                disabled={isSubmitting}
+                onBlur={() => handleValidation('password')}
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white ${errors.password ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
               />
+              {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
             </div>
-            <div>
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={isSubmitting || authIsLoading}
                 className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:opacity-50"
               >
-                {isSubmitting || authIsLoading ? (
-                  <>
-                    <Spinner size="w-4 h-4 mr-2" />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign in'
-                )}
+                {isSubmitting || authIsLoading ? (<><Spinner size="w-4 h-4 mr-2" /> Signing in...</>) : ('Sign in')}
               </button>
             </div>
           </form>

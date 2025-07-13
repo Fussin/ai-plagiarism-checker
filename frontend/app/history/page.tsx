@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react'; // Added useMemo
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -21,6 +21,7 @@ interface ScanHistoryItem {
 }
 
 const ScanDetailModal = ({ item, onClose }: { item: ScanHistoryItem, onClose: () => void }) => {
+  // ... (Modal component remains the same)
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -39,7 +40,7 @@ const ScanDetailModal = ({ item, onClose }: { item: ScanHistoryItem, onClose: ()
       >
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
-                Scan Details: {item.file_name || item.content_type.replace("_", " ")}
+                Scan Details: {item.file_name || item.content_type.replace(/_/g, " ")}
             </h2>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">&times;</button>
         </div>
@@ -77,6 +78,8 @@ const ScanDetailModal = ({ item, onClose }: { item: ScanHistoryItem, onClose: ()
   );
 };
 
+const filterOptions = ["all", "text", "file", "image", "video"];
+
 export default function HistoryPage() {
   const { user, token, isLoading: authLoading } = useAuth();
   const router = useRouter();
@@ -84,7 +87,8 @@ export default function HistoryPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedScan, setSelectedScan] = useState<ScanHistoryItem | null>(null);
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card'); // State for view mode
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+  const [activeFilter, setActiveFilter] = useState('all'); // State for filtering
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -106,6 +110,13 @@ export default function HistoryPage() {
       fetchHistory();
     }
   }, [user, token, authLoading, router]);
+
+  const filteredHistory = useMemo(() => {
+    if (activeFilter === 'all') {
+      return history;
+    }
+    return history.filter(item => item.content_type.includes(activeFilter));
+  }, [history, activeFilter]);
 
   if (authLoading || isLoadingHistory) {
     return <div className="text-center p-10">Loading history...</div>;
@@ -130,26 +141,44 @@ export default function HistoryPage() {
 
   return (
     <PageWrapper className="space-y-8">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap gap-4 justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Scan History</h1>
-        <div className="flex items-center space-x-2 p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
-          <button onClick={() => setViewMode('card')} className={`p-1.5 rounded-md ${viewMode === 'card' ? 'bg-white dark:bg-gray-900 shadow' : 'hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
-            <Squares2X2Icon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
-          </button>
-          <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md ${viewMode === 'table' ? 'bg-white dark:bg-gray-900 shadow' : 'hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
-            <QueueListIcon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
-          </button>
+        <div className="flex items-center space-x-4">
+            {/* Filter Dropdown */}
+            <div className="relative">
+                 <select
+                    value={activeFilter}
+                    onChange={(e) => setActiveFilter(e.target.value)}
+                    className="appearance-none w-full md:w-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 py-2 pl-3 pr-8 rounded-lg leading-tight focus:outline-none focus:bg-white dark:focus:bg-gray-600 focus:border-gray-500"
+                 >
+                    {filterOptions.map(opt => (
+                        <option key={opt} value={opt} className="capitalize">{opt.charAt(0).toUpperCase() + opt.slice(1)}</option>
+                    ))}
+                 </select>
+                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-200">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                </div>
+            </div>
+            {/* View Toggle */}
+            <div className="flex items-center space-x-1 p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
+                <button onClick={() => setViewMode('card')} className={`p-1.5 rounded-md ${viewMode === 'card' ? 'bg-white dark:bg-gray-900 shadow' : 'hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+                    <Squares2X2Icon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
+                </button>
+                <button onClick={() => setViewMode('table')} className={`p-1.5 rounded-md ${viewMode === 'table' ? 'bg-white dark:bg-gray-900 shadow' : 'hover:bg-gray-300 dark:hover:bg-gray-600'}`}>
+                    <QueueListIcon className="h-5 w-5 text-gray-700 dark:text-gray-200" />
+                </button>
+            </div>
         </div>
       </div>
 
       <AnimatePresence mode="wait">
-        {history.length === 0 ? (
+        {filteredHistory.length === 0 ? (
           <motion.p {...layoutTransition} key="no-history" className="text-center text-gray-500 dark:text-gray-400 py-10">
-            No scan history found. Start checking your content!
+            No scans found for the selected filter.
           </motion.p>
         ) : viewMode === 'card' ? (
           <motion.div {...layoutTransition} key="card-view" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {history.map((item, index) => (
+            {filteredHistory.map((item, index) => (
               <motion.div key={item.id} className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 hover:shadow-xl transition-shadow duration-300 flex flex-col justify-between" variants={cardVariants} initial="hidden" animate="visible" custom={index} layout>
                 <div>
                   <div className="flex justify-between items-start mb-2">
@@ -178,7 +207,7 @@ export default function HistoryPage() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {history.map((item) => (
+                {filteredHistory.map((item) => (
                   <motion.tr key={item.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white capitalize">{item.file_name || item.content_type.replace(/_/g, " ")}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{new Date(item.timestamp).toLocaleDateString()}</td>

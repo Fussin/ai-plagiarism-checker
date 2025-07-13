@@ -7,42 +7,58 @@ import { useRouter } from 'next/navigation';
 import Spinner from '@/components/Spinner';
 import PageWrapper from '@/components/PageWrapper';
 
+// Validation utility
+const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [formError, setFormError] = useState<string | null>(null);
+
+  // State for individual field errors
+  const [errors, setErrors] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    form: '', // For general form errors on submit
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { signup, isLoading: authIsLoading, user } = useAuth();
   const router = useRouter();
 
-  const validateForm = () => {
-    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
-      setFormError("All fields are required.");
-      return false;
+  const handleValidation = (field: 'email' | 'password' | 'confirmPassword') => {
+    let errorMsg = '';
+    switch (field) {
+      case 'email':
+        if (!email) errorMsg = "Email is required.";
+        else if (!validateEmail(email)) errorMsg = "Please enter a valid email address.";
+        break;
+      case 'password':
+        if (!password) errorMsg = "Password is required.";
+        else if (password.length < 8) errorMsg = "Password must be at least 8 characters long.";
+        break;
+      case 'confirmPassword':
+        if (!confirmPassword) errorMsg = "Please confirm your password.";
+        else if (password && password !== confirmPassword) errorMsg = "Passwords do not match.";
+        break;
     }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setFormError("Please enter a valid email address.");
-      return false;
-    }
-    if (password.length < 8) {
-      setFormError("Password must be at least 8 characters long.");
-      return false;
-    }
-    if (password !== confirmPassword) {
-      setFormError("Passwords do not match.");
-      return false;
-    }
-    return true;
+    setErrors(prev => ({ ...prev, [field]: errorMsg }));
+    return !errorMsg;
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFormError(null);
-    if (!validateForm()) {
+    // Run all validations before submitting
+    const isEmailValid = handleValidation('email');
+    const isPasswordValid = handleValidation('password');
+    const isConfirmPasswordValid = handleValidation('confirmPassword');
+
+    if (!isEmailValid || !isPasswordValid || !isConfirmPasswordValid) {
       return;
     }
+
+    setErrors(prev => ({ ...prev, form: '' }));
     setIsSubmitting(true);
 
     const result = await signup(email, password);
@@ -50,7 +66,7 @@ export default function RegisterPage() {
     if (result.success) {
       router.push('/');
     } else {
-      setFormError(result.error || 'Signup failed. The email might already be registered.');
+      setErrors(prev => ({ ...prev, form: result.error || 'Signup failed. The email might already be registered.' }));
     }
     setIsSubmitting(false);
   };
@@ -70,8 +86,8 @@ export default function RegisterPage() {
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)]">
         <div className="w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg">
           <h1 className="text-3xl font-bold text-center text-gray-900 dark:text-white">Create Account</h1>
-          {formError && <p className="text-red-500 text-sm text-center bg-red-100 dark:bg-red-900/30 p-2 rounded-md">{formError}</p>}
-          <form className="space-y-6" onSubmit={handleSubmit}>
+          {errors.form && <p className="text-red-500 text-sm text-center bg-red-100 dark:bg-red-900/30 p-2 rounded-md">{errors.form}</p>}
+          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
             <div>
               <label
                 htmlFor="email"
@@ -83,14 +99,13 @@ export default function RegisterPage() {
                 id="email"
                 name="email"
                 type="email"
-                autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-                placeholder="you@example.com"
-                disabled={isSubmitting}
+                onBlur={() => handleValidation('email')}
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white ${errors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
               />
+              {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email}</p>}
             </div>
             <div>
               <label
@@ -103,14 +118,14 @@ export default function RegisterPage() {
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="new-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                onBlur={() => handleValidation('password')}
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white ${errors.password ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
                 placeholder="At least 8 characters"
-                disabled={isSubmitting}
               />
+               {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
             </div>
             <div>
               <label
@@ -123,29 +138,21 @@ export default function RegisterPage() {
                 id="confirm-password"
                 name="confirm-password"
                 type="password"
-                autoComplete="new-password"
                 required
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-                placeholder="••••••••"
-                disabled={isSubmitting}
+                onBlur={() => handleValidation('confirmPassword')}
+                className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
               />
+              {errors.confirmPassword && <p className="mt-1 text-xs text-red-500">{errors.confirmPassword}</p>}
             </div>
-            <div>
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={isSubmitting || authIsLoading}
                 className="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-600 disabled:opacity-50"
               >
-                {isSubmitting || authIsLoading ? (
-                  <>
-                    <Spinner size="w-4 h-4 mr-2" />
-                    Registering...
-                  </>
-                ) : (
-                  'Register'
-                )}
+                {isSubmitting || authIsLoading ? (<><Spinner size="w-4 h-4 mr-2" /> Registering...</>) : ('Register')}
               </button>
             </div>
           </form>
