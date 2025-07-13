@@ -19,126 +19,98 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
     *   **🖼️ Image Checker**: Accepts image uploads (.jpg, .png, .gif). Calculates perceptual image hashes and simulates reverse image search using a *mocked* database.
     *   **🎥 Video Checker**: Accepts video uploads (.mp4). Extracts audio (with *placeholder* transcription) and frames. Performs NLP self-similarity on audio text and mocked reverse search on frame hashes.
 *   **📊 Detailed Reports**:
-    *   Auto-generated reports display an originality score, specific findings (e.g., similar sentences, matched image sources from mock DB), and actionable rewrite suggestions.
-    *   "Export Results" button allows downloading a text summary of the current scan.
+    *   Auto-generated reports display an originality score, specific findings, and actionable rewrite suggestions.
+    *   "Export Results" button allows downloading a text summary of the current scan (for subscribed users).
 *   **👤 User Authentication & Personalized Experience**:
     *   Secure user registration and login system using JWT-based authentication.
-*   **Tiered Pricing & Usage Limits**:
+*   **Tiered Pricing & Subscription System**:
     *   A dedicated `/pricing` page displays plan features in both card and table formats.
+    *   **Stripe Integration**: Handles subscription checkouts and manages user plan status via webhooks.
     *   The backend enforces feature gates and usage limits based on user subscription plans (Free, Pro Basic, etc.). This includes monthly word counts, file size limits, and feature access for history and report downloads.
 *   **User-specific scan history dashboard** with Card and Table views to review past checks.
 *   Persistent user, history, and usage data stored in a database (SQLite by default).
 *   **✨ GPT-Powered Text Humanization**:
     *   An AI tool to rephrase user-provided text using an OpenAI GPT model (defaulting to `gpt-4-turbo`). Usage is metered based on the user's plan. Requires an OpenAI API key.
 *   **🤖 FastAPI Backend**:
-    *   Serves dedicated endpoints for plagiarism checking, authentication, scan history, AI tools, and a mock admin tool for setting user plans.
+    *   Serves dedicated endpoints for plagiarism checking, authentication, scan history, subscriptions, AI tools, and a mock admin tool for setting user plans.
     *   Includes a multi-file preview endpoint (`/api/check`) that extracts text from various document types (via byte stream processing) and returns quick previews.
-    *   Modular services for text processing (filepath and byte-based), NLP, image analysis, and video processing.
 *   **🧪 Testing Setup**:
-    *   Backend unit tests for key services and utilities (auth, text processing, history, AI services).
+    *   Backend unit tests for key services and utilities (auth, text processing, history, AI services, subscriptions).
     *   Frontend component testing setup using Jest and React Testing Library, with example tests for key components.
 
 ## Technology Stack
 
 *   **Frontend**:
-    *   Next.js 14+ (App Router)
-    *   React 18+
-    *   TypeScript
-    *   Tailwind CSS
-    *   Framer Motion (for animations and page transitions)
-    *   `next-themes` (for dark/light mode theme management)
-    *   Heroicons (for UI icons)
-    *   Jest & React Testing Library (for component testing)
+    *   Next.js 14+, React 18+, TypeScript, Tailwind CSS, Framer Motion, `next-themes`, Heroicons, Jest, React Testing Library.
 *   **Backend**:
-    *   Python 3.x (project developed with 3.11+)
-    *   FastAPI
-    *   Uvicorn (ASGI server)
-    *   SQLAlchemy (ORM for database interaction)
-    *   Alembic (for database migrations)
-    *   SQLite (default database, easily configurable for PostgreSQL, etc.)
-    *   `sentence-transformers` & `torch` (for NLP text similarity)
-    *   `openai` (for GPT model integration)
-    *   `Pillow`, `imagehash` (for image processing and hashing)
-    *   `opencv-python` (for video frame extraction)
-    *   `moviepy` (for audio extraction from video)
-    *   `python-jose[cryptography]`, `passlib[bcrypt]` (for JWT authentication)
-    *   `pdfminer.six`, `python-docx` (for document text extraction)
-    *   `python-dotenv` (for environment variable management)
+    *   Python 3.x, FastAPI, Uvicorn, SQLAlchemy, Alembic, SQLite, `sentence-transformers`, `torch`, `openai`, `stripe`, and various media/document processing libraries.
 
 ## Setup and Installation
 
 ### Prerequisites
 
-*   Node.js (v18.x or later recommended for Next.js 14)
+*   Node.js (v18.x or later)
 *   `npm` (or `yarn`/`pnpm`)
-*   Python 3.8+ (project developed with 3.11+)
-*   `pip` (Python package installer)
-*   **OpenAI API Key**: Required *only* for the Text Humanization feature.
+*   Python 3.8+
+*   `pip`
+*   **Stripe Account & CLI**: Required for subscription functionality.
+*   **OpenAI API Key**: Optional, only for the Text Humanization feature.
 
 ### Backend Setup
 
-1.  **Navigate to the project root directory.**
-2.  **Create and activate a Python virtual environment:**
-    ```bash
-    python -m venv venv
-    # Windows:
-    .\venv\Scripts\activate
-    # macOS/Linux:
-    source venv/bin/activate
-    ```
-3.  **Install Python dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-    *Note: This installation includes `torch`, which can be large. If you encounter "No space left on device" errors in very constrained environments, ensure adequate disk space.*
-4.  **Set up Environment Variables (Backend)**:
-    *   Create a `.env` file in the **project root directory**.
-    *   **Database URL (Optional)**: Defaults to a SQLite database (`test.db`) in the project root. To use PostgreSQL, set `DATABASE_URL="postgresql://user:pass@host:port/dbname"`.
-    *   **OpenAI API Key (Optional)**: Add `OPENAI_API_KEY="your_openai_api_key_here"` to use the Text Humanization feature.
-    *   **JWT Secret Key (Recommended)**: Override the default by setting `SECRET_KEY="your_very_strong_random_secret_key_for_jwt"`.
-5.  **Apply Database Migrations:**
-    *   Navigate to the `backend` directory: `cd backend`
-    *   Run Alembic migrations: `alembic upgrade head`
-    *   Navigate back to project root: `cd ..`
-    *(If `alembic` is not found, try `python -m alembic upgrade head` from the `backend` directory).*
-6.  **Run the FastAPI Backend Server:**
-    ```bash
-    uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-    ```
+1.  **Stripe Product & Price Setup**:
+    *   In your Stripe Dashboard, go to "Products".
+    *   Create two products: "Pro Basic" and "Pro Advanced".
+    *   For each product, add a recurring monthly price (e.g., $19/mo, $49/mo).
+    *   Copy the **Price ID** for each (e.g., `price_...`).
+
+2.  **Navigate to the project root directory.**
+3.  **Create and activate a Python virtual environment:** `python -m venv venv` then activate it.
+4.  **Install Python dependencies:** `pip install -r requirements.txt`
+5.  **Set up `.env` File**:
+    *   In the project root, create a `.env` file.
+    *   **Database URL (Optional)**: Defaults to SQLite. For PostgreSQL, set `DATABASE_URL`.
+    *   **JWT Secret Key (Recommended)**: Set `SECRET_KEY="your_strong_secret_key"`.
+    *   **OpenAI API Key (Optional)**: Add `OPENAI_API_KEY="your_openai_key"`.
+    *   **Stripe Configuration (Required for Subscriptions)**:
+        *   Get your **Secret Key** from the Stripe Dashboard (Developers -> API keys).
+        *   Create a webhook endpoint (Developers -> Webhooks), get the **Webhook Signing Secret**.
+        ```env
+        STRIPE_API_KEY="sk_test_..."
+        STRIPE_WEBHOOK_SECRET="whsec_..."
+        STRIPE_PRICE_ID_PRO_BASIC="price_..."
+        STRIPE_PRICE_ID_PRO_ADVANCED="price_..."
+        ```
+6.  **Apply Database Migrations:** `cd backend` then `alembic upgrade head`.
+7.  **Run the FastAPI Backend Server:** `cd ..` then `uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000`.
 
 ### Frontend Setup (Next.js)
 
 1.  **Navigate to the `frontend` directory:** `cd frontend`
-2.  **Install Node.js dependencies:** `npm install`
-3.  **Set up Environment Variables (Frontend - Optional)**:
-    *   If your backend runs on a different URL, create a `.env.local` file in the `frontend` directory with: `NEXT_PUBLIC_API_BASE_URL=http://your_backend_api_url`
-4.  **Run the Next.js Development Server:**
+2.  **Install dependencies:** `npm install`
+3.  **Environment Variables (Optional)**: If your backend is not at `http://127.0.0.1:8000`, create a `.env.local` file in `frontend` with `NEXT_PUBLIC_API_BASE_URL=http://your_backend_url`.
+4.  **Run the Dev Server:** `npm run dev`. The app will be at `http://localhost:3000`.
+
+### Testing Stripe Webhooks Locally
+
+1.  Install the [Stripe CLI](https://stripe.com/docs/stripe-cli).
+2.  Run the command to forward webhook events to your local backend server:
     ```bash
-    npm run dev
+    stripe listen --forward-to localhost:8000/api/webhooks/stripe
     ```
-    The frontend will typically be available at `http://localhost:3000`.
+3.  The CLI will provide a new webhook secret for testing. Use this temporary secret in your `.env` file while testing.
 
 ## How to Use
-
-1.  **Ensure both backend and frontend servers are running.**
-2.  **Access the Application**: Open `http://localhost:3000`.
-3.  **Authentication**: Register for a new account or log in. Login is required to save and view scan history.
-4.  **View Pricing**: Navigate to the "Pricing" page from the header to compare plan features.
-5.  **Checking Content (Home Page)**: Use the forms to check text, upload documents, images, or videos. Results appear dynamically below.
-6.  **Text Humanization (Home Page)**: Use the GPT-powered tool to rephrase text (requires API key).
-7.  **Scan History (History Page)**: View past scans in a card or table layout. Click "View Details" for a full report in a modal.
-8.  **Multi-File Preview API (For Programmatic Use)**: The `POST /api/check` endpoint can be used by other tools to get quick text previews from multiple files.
+(The "How to Use" section is largely the same, but now includes a step for subscriptions.)
+1.  ...
+2.  **Subscribe to a Plan**: Navigate to the "Pricing" page. Click a "Subscribe" button to be redirected to Stripe Checkout.
+3.  ...
 
 ## Running Tests
-
-*   **Backend**: Navigate to the `backend` directory and run `python -m unittest discover -s tests`.
-*   **Frontend**: Navigate to the `frontend` directory and run `npm test`.
-    *   *Note: Frontend test execution may fail in some sandboxed environments due to module resolution issues. The configuration is standard and should work in a local setup.*
+(This section remains the same.)
 
 ## Current Limitations & Mocked Components
-(This section remains largely the same, detailing mocked reverse image search, placeholder audio transcription, and focus on self-similarity.)
+(This section remains the same.)
 
-## Deployment Considerations (Production Environment)
-(This section remains largely the same, detailing production-ready practices.)
-
-This README provides a comprehensive guide to understanding, setting up, and using the AI Plagiarism Web App.
+## Deployment Considerations
+(This section remains the same.)

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, checker, history, ai_tools, preview_api, admin_tools # Import admin_tools
+from .routers import auth, checker, history, ai_tools, preview_api, admin_tools, subscription # Import subscription
 from .config import settings
 import os
 
@@ -35,7 +35,8 @@ app.include_router(checker.router)
 app.include_router(history.router)
 app.include_router(ai_tools.router)
 app.include_router(preview_api.router)
-app.include_router(admin_tools.router) # Include the new admin_tools router
+app.include_router(admin_tools.router)
+app.include_router(subscription.router) # Include the new subscription router
 
 @app.get("/")
 async def root():

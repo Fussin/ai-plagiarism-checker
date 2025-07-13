@@ -17,8 +17,9 @@ class UserDB(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
-    plan = Column(String, default="free", nullable=False) # free, pro_basic, pro_advanced, enterprise
-    subscription_status = Column(String, default="active", nullable=False) # active, inactive, past_due
+    plan = Column(String, default="free", nullable=False)
+    subscription_status = Column(String, default="active", nullable=False)
+    stripe_customer_id = Column(String, unique=True, index=True, nullable=True)
 
     scan_history = relationship("ScanHistoryDB", back_populates="owner")
     usage = relationship("UsageDB", back_populates="user", uselist=False) # one-to-one-ish (one per month, but simple for now)

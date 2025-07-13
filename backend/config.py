@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     # GOOGLE_CSE_ID: Optional[str] = None
     OPENAI_API_KEY: str | None = None
 
+    # Stripe Settings
+    STRIPE_API_KEY: str | None = None
+    STRIPE_WEBHOOK_SECRET: str | None = None
+    # Price IDs from your Stripe Dashboard
+    STRIPE_PRICE_ID_PRO_BASIC: str | None = None
+    STRIPE_PRICE_ID_PRO_ADVANCED: str | None = None
+    # Frontend URL for Stripe redirects
+    FRONTEND_URL: str = "http://localhost:3000"
+
 
     # model_config allows loading from .env file
     model_config = SettingsConfigDict(env_file=os.path.join(PROJECT_ROOT, ".env"), extra='ignore')
