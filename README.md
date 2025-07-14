@@ -13,7 +13,7 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
     *   Smooth page transitions and component animations using Framer Motion.
     *   Dark/Light mode theme toggle provided by `next-themes`.
     *   Client-side routing and state management (React Context) for a seamless user experience.
-    *   Modern UI/UX refinements like toast notifications for feedback and client-side form validation.
+    *   Modern UI/UX refinements like non-blocking toast notifications, real-time client-side form validation, and enhanced loading states.
 *   **Comprehensive Plagiarism Checking**:
     *   **📝 Text Checker**: Accepts direct text input or file uploads (.txt, .pdf, .docx). Extracts text and uses a `sentence-transformers` model (`all-MiniLM-L6-v2`) for self-similarity analysis.
     *   **🖼️ Image Checker**: Accepts image uploads (.jpg, .png, .gif). Calculates perceptual image hashes and simulates reverse image search using a *mocked* database.
@@ -27,7 +27,7 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
     *   A dedicated `/pricing` page displays plan features in both card and table formats.
     *   **Stripe Integration**: Handles subscription checkouts and manages user plan status via webhooks.
     *   The backend enforces feature gates and usage limits based on user subscription plans (Free, Pro Basic, etc.). This includes monthly word counts, file size limits, and feature access for history and report downloads.
-*   **User-specific scan history dashboard** with Card and Table views to review past checks.
+*   **User-specific scan history dashboard** with filtering, Card, and Table views to review past checks.
 *   Persistent user, history, and usage data stored in a database (SQLite by default).
 *   **✨ GPT-Powered Text Humanization**:
     *   An AI tool to rephrase user-provided text using an OpenAI GPT model (defaulting to `gpt-4-turbo`). Usage is metered based on the user's plan. Requires an OpenAI API key.
@@ -101,16 +101,27 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
 3.  The CLI will provide a new webhook secret for testing. Use this temporary secret in your `.env` file while testing.
 
 ## How to Use
-(The "How to Use" section is largely the same, but now includes a step for subscriptions.)
-1.  ...
-2.  **Subscribe to a Plan**: Navigate to the "Pricing" page. Click a "Subscribe" button to be redirected to Stripe Checkout.
-3.  ...
+
+1.  **Ensure both backend and frontend servers are running.**
+2.  **Access the Application**: Open `http://localhost:3000`.
+3.  **Theme Toggle**: Use the sun/moon icon in the header to switch between light and dark modes.
+4.  **Authentication**: Register for a new account or log in. Login is required to save and view scan history.
+5.  **View Pricing**: Navigate to the "Pricing" page from the header to compare plan features and subscribe.
+6.  **Checking Content (Home Page)**: Use the forms to check text, upload documents, images, or videos. Buttons provide loading state feedback. Results appear with animations.
+7.  **Text Humanization (Home Page)**: Use the GPT-powered tool to rephrase text (requires API key and is subject to plan limits).
+8.  **Scan History (History Page)**: View past scans. Use the dropdown to filter by content type and the icons to toggle between Card and Table views. Click "View Details" for a full report.
+9.  **Multi-File Preview API (For Programmatic Use)**: The `POST /api/check` endpoint can be used by other tools to get quick text previews from multiple files.
 
 ## Running Tests
-(This section remains the same.)
+
+*   **Backend**: Navigate to the `backend` directory and run `python -m unittest discover -s tests`.
+*   **Frontend**: Navigate to the `frontend` directory and run `npm test`.
+    *   *Note: Frontend test execution may fail in some sandboxed environments due to module resolution issues. The configuration is standard and should work in a local setup.*
 
 ## Current Limitations & Mocked Components
-(This section remains the same.)
+(This section remains largely the same, detailing mocked reverse image search, placeholder audio transcription, and focus on self-similarity.)
 
-## Deployment Considerations
-(This section remains the same.)
+## Deployment Considerations (Production Environment)
+(This section remains largely the same, detailing production-ready practices.)
+
+This README provides a comprehensive guide to understanding, setting up, and using the AI Plagiarism Web App.

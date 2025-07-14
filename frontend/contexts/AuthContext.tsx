@@ -13,14 +13,24 @@ interface User {
   // Add other user fields if needed by the frontend
 }
 
+interface UsageSummary {
+    plan: string;
+    words_scanned: number;
+    word_limit: number;
+    humanizer_uses: number;
+    humanizer_limit: number;
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  usageSummary: UsageSummary | null;
   login: (email: string, password?: string) => Promise<{ success: boolean; error?: string }>;
   signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   fetchUser: () => Promise<void>;
+  fetchUsage: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,29 +38,48 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [usageSummary, setUsageSummary] = useState<UsageSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const { addToast } = useToast(); // Use the toast context
+  const { addToast } = useToast();
 
   useEffect(() => {
     const storedToken = localStorage.getItem('authToken');
     if (storedToken) {
       setToken(storedToken);
     }
-    setIsLoading(false); // Done checking local storage
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    if (token && !user) { // If token exists but no user data, fetch user
+    if (token && !user) {
       fetchUser();
     } else if (!token) {
-      setUser(null); // Clear user if no token
+      setUser(null);
+      setUsageSummary(null);
     }
-  }, [token]); // Rerun when token changes
+  }, [token]);
+
+  const fetchUsage = async () => {
+    if (!token) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/me/usage-summary`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        setUsageSummary(await response.json());
+      } else {
+        console.error("Failed to fetch usage summary.");
+      }
+    } catch (error) {
+      console.error("Error fetching usage summary:", error);
+    }
+  };
 
   const fetchUser = async () => {
     if (!token) {
       setUser(null);
+      setUsageSummary(null);
       return;
     }
     setIsLoading(true);
@@ -63,13 +92,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
+        await fetchUsage(); // Fetch usage after successfully fetching user
       } else {
-        // Token might be invalid or expired
         console.error('Failed to fetch user, token might be invalid');
         localStorage.removeItem('authToken');
         setToken(null);
         setUser(null);
-        // Optionally redirect to login if on a protected page, handled by page components
+        setUsageSummary(null);
         addToast('Session expired. Please log in again.', 'error');
       }
     } catch (error) {
@@ -145,13 +174,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
+    setUsageSummary(null); // Clear usage on logout
     localStorage.removeItem('authToken');
     addToast('You have been logged out.', 'info');
     router.push('/login');
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, signup, logout, fetchUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, usageSummary, login, signup, logout, fetchUser, fetchUsage }}>
       {children}
     </AuthContext.Provider>
   );

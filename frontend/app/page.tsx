@@ -10,6 +10,7 @@ interface ScanResult {
   originality_score: number;
   matched_sources: string[];
   rewrite_suggestions: string[];
+  can_download_report: boolean;
 }
 
 interface HumanizerResult {
@@ -22,7 +23,7 @@ interface HumanizerResult {
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
 
 export default function HomePage() {
-  const { user, token } = useAuth();
+  const { user, token, fetchUsage } = useAuth();
 
   const [textInput, setTextInput] = useState('');
   const [files, setFiles] = useState<{ [key: string]: File | null }>({
@@ -31,7 +32,7 @@ export default function HomePage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
-  const [currentScanType, setCurrentScanType] = useState<string | null>(null); // Used for display and button states
+  const [currentScanType, setCurrentScanType] = useState<string | null>(null);
 
   const [humanizerInput, setHumanizerInput] = useState('');
   const [humanizerResult, setHumanizerResult] = useState<HumanizerResult | null>(null);
@@ -53,7 +54,7 @@ export default function HomePage() {
   const saveHistory = async (contentTypeForHistory: string, resultData: ScanResult, fileName?: string, inputSnippet?: string) => {
     if (!user || !token) return;
     const historyPayload = {
-      content_type: contentTypeForHistory, // Use the specific type for history
+      content_type: contentTypeForHistory,
       file_name: fileName,
       input_snippet: inputSnippet ? inputSnippet.substring(0, 250) : `Scan of ${contentTypeForHistory}`,
       originality_score: resultData.originality_score,
@@ -63,12 +64,10 @@ export default function HomePage() {
     try {
       await fetch(`${API_BASE_URL}/history/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(historyPayload),
       });
+      fetchUsage();
     } catch (historyError) {
       console.error('Failed to save history:', historyError);
     }
@@ -77,7 +76,7 @@ export default function HomePage() {
   const handleTextSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!textInput.trim()) { setScanError("Please enter some text to check."); return; }
-    setCurrentScanType("Text Input"); // Set scan type for UI feedback
+    setCurrentScanType("Text Input");
     setIsScanning(true); setScanError(null); setScanResult(null);
     try {
       const response = await fetch(`${API_BASE_URL}/check/text`, {
@@ -99,7 +98,7 @@ export default function HomePage() {
     if (!file) { setScanError(`Please select a ${fileTypeKey.replace('File','')} file.`); return; }
 
     const scanTypeForDisplay = `${fileTypeKey.replace('File','')} File: ${file.name}`;
-    setCurrentScanType(scanTypeForDisplay); // For UI feedback and button state
+    setCurrentScanType(scanTypeForDisplay);
     setIsScanning(true); setScanError(null); setScanResult(null);
 
     const formData = new FormData();
@@ -113,7 +112,6 @@ export default function HomePage() {
       const data = await response.json();
       if (response.ok) {
         setScanResult(data);
-        // Use historyContentType for saving, which is more specific (e.g., "file_pdf")
         if (user) await saveHistory(historyContentType, data, file.name, `Content of ${file.name}`);
       } else { setScanError(data.detail || `Failed to check ${fileTypeKey.replace('File','')} file.`); }
     } catch (err) { setScanError(`An error occurred while checking ${fileTypeKey.replace('File','')} file.`); console.error(err);
@@ -144,7 +142,10 @@ export default function HomePage() {
         body: JSON.stringify({ text: humanizerInput }),
       });
       const data: HumanizerResult = await response.json();
-      if (response.ok && data.humanized_text) { setHumanizerResult(data); }
+      if (response.ok && data.humanized_text) {
+        setHumanizerResult(data);
+        if (user) fetchUsage();
+      }
       else { setHumanizerError(data.error || "Failed to humanize text."); setHumanizerResult(data); }
     } catch (err) { setHumanizerError("An error occurred while humanizing text."); console.error(err);
     } finally { setIsHumanizing(false); }
@@ -221,7 +222,7 @@ export default function HomePage() {
               <p><strong>Originality Score:</strong> <span className={`font-bold ${ scanResult.originality_score > 0.9 ? 'text-green-600 dark:text-green-400' : scanResult.originality_score > 0.7 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400' }`}>{(scanResult.originality_score * 100).toFixed(1)}%</span></p>
               {scanResult.matched_sources.length > 0 && ( <div> <h4 className="font-semibold mt-2">Details & Matched Sources:</h4> <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-300 max-h-48 overflow-y-auto"> {scanResult.matched_sources.map((source, index) => <li key={index}>{source}</li>)} </ul> </div> )}
               {scanResult.rewrite_suggestions.length > 0 && ( <div> <h4 className="font-semibold mt-2">Rewrite Suggestions:</h4> <ul className="list-disc list-inside text-sm text-gray-700 dark:text-gray-300"> {scanResult.rewrite_suggestions.map((suggestion, index) => <li key={index}>{suggestion}</li>)} </ul> </div> )}
-              <button onClick={exportResults} className="mt-4 px-6 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-md shadow-sm transition duration-150"> Export Results </button>
+              {scanResult.can_download_report && <button onClick={exportResults} className="mt-4 px-6 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-md shadow-sm transition duration-150"> Export Results </button>}
             </div>
           )}
           </motion.section>

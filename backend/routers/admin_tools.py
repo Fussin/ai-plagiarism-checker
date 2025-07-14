@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
+import sqlalchemy as sa # Import sqlalchemy
 from typing import List
 
 from backend import models
@@ -45,3 +46,26 @@ async def set_user_plan(
     db.refresh(db_user)
 
     return db_user
+
+@router.post("/reset-all-usage")
+async def reset_all_usage(db: Session = Depends(get_db)):
+    """
+    (Admin Mock) Resets the usage counters for all users.
+    This simulates a monthly cron job for testing plan limits.
+    """
+    try:
+        num_rows_updated = db.query(models.UsageDB).update({
+            models.UsageDB.words_scanned: 0,
+            models.UsageDB.humanizer_uses: 0,
+            models.UsageDB.last_reset: sa.func.now()
+        })
+        db.commit()
+        print(f"ADMIN ACTION: Reset usage for {num_rows_updated} users.")
+        return {"status": "success", "users_reset": num_rows_updated}
+    except Exception as e:
+        db.rollback()
+        print(f"Error resetting all user usage: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not reset user usage."
+        )

@@ -32,6 +32,10 @@ async def _save_scan_to_history(
     db: Session, user_id: int, content_type: str,
     result: PlagiarismResultSchema, file_name: Optional[str] = None, input_snippet: Optional[str] = None
 ):
+    plan_limits = get_plan_limits(db.query(UserDB).filter(UserDB.id == user_id).first().plan)
+    if not plan_limits["can_view_history"]:
+        return # Don't save history if plan doesn't allow it
+
     if not input_snippet and result.matched_sources:
         input_snippet = f"Scan result with score: {result.originality_score*100:.1f}%"
     history_entry = models.ScanHistoryDB(
@@ -57,11 +61,12 @@ async def check_text_plagiarism(
         return PlagiarismResultSchema(originality_score=1.0, matched_sources=["No text provided."], can_download_report=plan_limits["can_download_report"])
 
     if not usage_service.check_word_limit(current_user, usage, word_count):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Monthly word limit exceeded. Please upgrade your plan.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="LIMIT_EXCEEDED:Monthly word limit exceeded. Please upgrade your plan.")
 
     text_to_scan = request.text
-    if current_user.plan == 'free' and word_count > plan_limits["scan_limit_per_file"]:
-        text_to_scan = " ".join(request.text.split()[:plan_limits["scan_limit_per_file"]])
+    scan_limit = plan_limits.get("scan_limit_per_file", float('inf'))
+    if word_count > scan_limit:
+        text_to_scan = " ".join(request.text.split()[:scan_limit])
 
     similarity_results = nlp_tasks.check_text_similarity_self(text_to_scan)
     result = PlagiarismResultSchema(
@@ -83,7 +88,7 @@ async def check_text_file_plagiarism(
 ):
     plan_limits = get_plan_limits(current_user.plan)
     if file.size > plan_limits["max_file_size"]:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"File size exceeds the {plan_limits['max_file_size']/1024/1024:.1f} MB limit for your plan.")
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"FILE_TOO_LARGE:File size exceeds the {plan_limits['max_file_size']/1024/1024:.1f} MB limit for your plan.")
 
     temp_file_path = save_upload_file(file, settings.UPLOAD_DIR)
     try:
@@ -92,11 +97,12 @@ async def check_text_file_plagiarism(
         usage = usage_service.get_or_create_usage_record(db, current_user)
 
         if not usage_service.check_word_limit(current_user, usage, word_count):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Monthly word limit exceeded. Please upgrade your plan.")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="LIMIT_EXCEEDED:Monthly word limit exceeded. Please upgrade your plan.")
 
         text_to_scan = extracted_text
-        if current_user.plan == 'free' and word_count > plan_limits["scan_limit_per_file"]:
-            text_to_scan = " ".join(extracted_text.split()[:plan_limits["scan_limit_per_file"]])
+        scan_limit = plan_limits.get("scan_limit_per_file", float('inf'))
+        if word_count > scan_limit:
+            text_to_scan = " ".join(extracted_text.split()[:scan_limit])
 
         similarity_results = nlp_tasks.check_text_similarity_self(text_to_scan)
         result = PlagiarismResultSchema(
@@ -110,10 +116,10 @@ async def check_text_file_plagiarism(
         await _save_scan_to_history(db, current_user.id, f"file_{file.content_type.split('/')[-1]}", result, file_name=file.filename, input_snippet=extracted_text[:255])
         return result
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"FILE_CORRUPT:{e}")
     except Exception as e:
         print(f"An unexpected error occurred while processing file {file.filename}: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected server error occurred while processing your file.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="SERVER_ERROR:An unexpected server error occurred while processing your file.")
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -122,7 +128,7 @@ async def check_text_file_plagiarism(
 async def check_image_plagiarism(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_active_user)):
     plan_limits = get_plan_limits(current_user.plan)
     if file.size > plan_limits["max_file_size"]:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"File size exceeds the {plan_limits['max_file_size']/1024/1024:.1f} MB limit for your plan.")
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"FILE_TOO_LARGE:File size exceeds the {plan_limits['max_file_size']/1024/1024:.1f} MB limit for your plan.")
 
     temp_file_path = save_upload_file(file, settings.UPLOAD_DIR)
     try:
@@ -139,7 +145,7 @@ async def check_image_plagiarism(file: UploadFile = File(...), db: Session = Dep
 async def check_video_plagiarism(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: UserDB = Depends(get_current_active_user)):
     plan_limits = get_plan_limits(current_user.plan)
     if file.size > plan_limits["max_file_size"]:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"File size exceeds the {plan_limits['max_file_size']/1024/1024:.1f} MB limit for your plan.")
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=f"FILE_TOO_LARGE:File size exceeds the {plan_limits['max_file_size']/1024/1024:.1f} MB limit for your plan.")
 
     # ... (rest of video logic)
     result = PlagiarismResultSchema(originality_score=0.85, matched_sources=["Video processed."], can_download_report=plan_limits["can_download_report"])
