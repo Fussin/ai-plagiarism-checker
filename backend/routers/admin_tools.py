@@ -6,13 +6,12 @@ from typing import List
 from backend import models
 from backend.database import get_db
 from backend.plans import PLAN_LIMITS
+from backend.dependencies import get_current_admin_user # Import the admin dependency
 
 router = APIRouter(
     prefix="/admin",
     tags=["admin_tools"],
-    # Note: In a real application, this entire router would be protected by
-    # a dependency that checks if the current_user is an admin.
-    # e.g., dependencies=[Depends(get_current_admin_user)]
+    dependencies=[Depends(get_current_admin_user)] # Protect all routes in this router
 )
 
 @router.post("/set-plan/{user_id}", response_model=models.UserSchema)

@@ -17,6 +17,7 @@ class UserDB(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False, nullable=False) # New admin field
     plan = Column(String, default="free", nullable=False)
     subscription_status = Column(String, default="active", nullable=False)
     stripe_customer_id = Column(String, unique=True, index=True, nullable=True)

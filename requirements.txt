@@ -27,5 +27,8 @@ python-dotenv # For loading .env files for config, including DATABASE_URL
 openai
 stripe
 
+# Security
+slowapi
+
 # Note: For SQLite, no separate driver needed in requirements.txt.
 # For PostgreSQL, add: psycopg2-binary

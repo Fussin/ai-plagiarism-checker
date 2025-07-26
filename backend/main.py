@@ -2,42 +2,58 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from .routers import auth, checker, history, ai_tools, preview_api, admin_tools, subscription, users
 from .config import settings
 import os
 
-# from .database import create_db_and_tables
-# if settings.DEBUG: # Example: only create tables automatically in debug mode
-#     print("DEBUG mode: Attempting to create database tables if they don't exist.")
-#     create_db_and_tables()
-
+# Rate Limiter
+limiter = Limiter(key_func=get_remote_address, default_limits=["1000/hour"])
 app = FastAPI(title=settings.APP_NAME)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Custom Exception Handler for structured errors
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    # Try to parse a more structured error code from the detail string if possible
-    # e.g., if detail is "LIMIT_EXCEEDED: Monthly word limit exceeded."
     error_code = "GENERAL_ERROR"
     message = exc.detail
     if ":" in exc.detail:
         parts = exc.detail.split(":", 1)
-        # A simple check to see if the first part is a valid-looking error code (e.g., UPPER_SNAKE_CASE)
         if parts[0].isupper() and " " not in parts[0]:
             error_code = parts[0]
             message = parts[1].strip()
-
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "error": error_code,
-            "message": message,
-        },
+        content={"error": error_code, "message": message},
         headers=exc.headers,
     )
 
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    # A basic Content Security Policy (CSP). This should be configured carefully for production.
+    # It prevents loading resources from untrusted sources.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; " # 'unsafe-inline' might be needed for some libs, but is less secure
+        "style-src 'self' 'unsafe-inline'; " # Same for styles
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'; "
+        "form-action 'self';"
+    )
+    return response
 
-# CORS Middleware Configuration (origins updated for Next.js default)
+# CORS Middleware Configuration
+# For production, you should restrict this to your specific frontend domain.
+# Example: origins = ["https://your-frontend-domain.com"]
 origins = [
     "http://localhost",
     "http://localhost:3000",
@@ -56,6 +72,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include all the application routers
 app.include_router(auth.router)
 app.include_router(checker.router)
 app.include_router(history.router)
@@ -63,7 +80,7 @@ app.include_router(ai_tools.router)
 app.include_router(preview_api.router)
 app.include_router(admin_tools.router)
 app.include_router(subscription.router)
-app.include_router(users.router) # Include the new users router
+app.include_router(users.router)
 
 @app.get("/")
 async def root():

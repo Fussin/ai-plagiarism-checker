@@ -29,6 +29,11 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
     *   The backend enforces feature gates and usage limits based on user subscription plans (Free, Pro Basic, etc.). This includes monthly word counts, file size limits, and feature access for history and report downloads.
 *   **User-specific scan history dashboard** with filtering, Card, and Table views to review past checks.
 *   Persistent user, history, and usage data stored in a database (SQLite by default).
+*   **🔐 Security Hardening (OWASP Top 10)**:
+    *   **Rate Limiting**: Protects authentication endpoints from brute-force attacks.
+    *   **Role-Based Access Control**: Secures admin-only endpoints.
+    *   **Secure Headers**: Implements `X-Content-Type-Options`, `X-Frame-Options`, and a basic `Content-Security-Policy`.
+    *   **Secrets Management**: Uses `.env` files for secrets, which are excluded from version control via `.gitignore`.
 *   **✨ GPT-Powered Text Humanization**:
     *   An AI tool to rephrase user-provided text using an OpenAI GPT model (defaulting to `gpt-4-turbo`). Usage is metered based on the user's plan. Requires an OpenAI API key.
 *   **🤖 FastAPI Backend**:
@@ -68,7 +73,7 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
 3.  **Create and activate a Python virtual environment:** `python -m venv venv` then activate it.
 4.  **Install Python dependencies:** `pip install -r requirements.txt`
 5.  **Set up `.env` File**:
-    *   In the project root, create a `.env` file.
+    *   In the project root, create a `.env` file from the `.env.example` template.
     *   **Database URL (Optional)**: Defaults to SQLite. For PostgreSQL, set `DATABASE_URL`.
     *   **JWT Secret Key (Recommended)**: Set `SECRET_KEY="your_strong_secret_key"`.
     *   **OpenAI API Key (Optional)**: Add `OPENAI_API_KEY="your_openai_key"`.
@@ -104,24 +109,23 @@ This project demonstrates a comprehensive approach to building AI-powered web ap
 
 1.  **Ensure both backend and frontend servers are running.**
 2.  **Access the Application**: Open `http://localhost:3000`.
-3.  **Theme Toggle**: Use the sun/moon icon in the header to switch between light and dark modes.
-4.  **Authentication**: Register for a new account or log in. Login is required to save and view scan history.
-5.  **View Pricing**: Navigate to the "Pricing" page from the header to compare plan features and subscribe.
-6.  **Checking Content (Home Page)**: Use the forms to check text, upload documents, images, or videos. Buttons provide loading state feedback. Results appear with animations.
-7.  **Text Humanization (Home Page)**: Use the GPT-powered tool to rephrase text (requires API key and is subject to plan limits).
-8.  **Scan History (History Page)**: View past scans. Use the dropdown to filter by content type and the icons to toggle between Card and Table views. Click "View Details" for a full report.
-9.  **Multi-File Preview API (For Programmatic Use)**: The `POST /api/check` endpoint can be used by other tools to get quick text previews from multiple files.
+3.  **Authentication**: Register for a new account or log in.
+4.  **View Pricing**: Navigate to the "Pricing" page to compare plans and subscribe.
+5.  **Checking Content (Home Page)**: Use the forms to check text or upload files. Your usage will be checked against your plan limits.
+6.  **Text Humanization (Home Page)**: Use the GPT-powered tool to rephrase text (requires API key and is subject to plan limits).
+7.  **Scan History (History Page)**: If your plan allows, view past scans, filter them by type, and toggle between card and table views.
+8.  **Admin Actions (For Testing)**:
+    *   To test plan-based features, you can manually set a user's `is_admin` flag to `true` in the database.
+    *   Once logged in as an admin, you can use the admin endpoints (e.g., `POST /admin/set-plan/{user_id}`) to change other users' plans.
 
 ## Running Tests
 
 *   **Backend**: Navigate to the `backend` directory and run `python -m unittest discover -s tests`.
 *   **Frontend**: Navigate to the `frontend` directory and run `npm test`.
-    *   *Note: Frontend test execution may fail in some sandboxed environments due to module resolution issues. The configuration is standard and should work in a local setup.*
+    *   *Note: Frontend test execution may fail in some sandboxed environments. The configuration is standard and should work in a local setup.*
 
 ## Current Limitations & Mocked Components
-(This section remains largely the same, detailing mocked reverse image search, placeholder audio transcription, and focus on self-similarity.)
+(This section remains largely the same.)
 
-## Deployment Considerations (Production Environment)
-(This section remains largely the same, detailing production-ready practices.)
-
-This README provides a comprehensive guide to understanding, setting up, and using the AI Plagiarism Web App.
+## Deployment Considerations
+(This section remains the same.)

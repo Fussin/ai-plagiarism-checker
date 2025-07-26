@@ -1,12 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta, datetime
 from sqlalchemy.orm import Session
+from backend.main import limiter
 
-from backend import models # Pydantic schemas & SQLAlchemy models (UserDB)
+from backend import models
 from backend.config import settings
-from backend.database import get_db # Database session dependency
-from backend.dependencies import get_current_active_user # For protected routes
+from backend.database import get_db
+from backend.dependencies import get_current_active_user
 
 from jose import jwt
 from passlib.context import CryptContext
@@ -34,12 +35,12 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
-# Helper function to get user by email from DB
 def get_user_by_email(db: Session, email: str) -> models.UserDB | None:
     return db.query(models.UserDB).filter(models.UserDB.email == email).first()
 
 @router.post("/signup", response_model=models.Token)
-async def signup(user_in: models.UserCreateSchema, db: Session = Depends(get_db)):
+@limiter.limit("10/minute") # Rate limit for signup
+async def signup(request: Request, user_in: models.UserCreateSchema, db: Session = Depends(get_db)):
     db_user = get_user_by_email(db, email=user_in.email)
     if db_user:
         raise HTTPException(
@@ -52,7 +53,6 @@ async def signup(user_in: models.UserCreateSchema, db: Session = Depends(get_db)
     db.commit()
     db.refresh(new_user)
 
-    # Also create an initial usage record for the new user
     initial_usage = models.UsageDB(user_id=new_user.id)
     db.add(initial_usage)
     db.commit()
@@ -65,22 +65,22 @@ async def signup(user_in: models.UserCreateSchema, db: Session = Depends(get_db)
 
 
 @router.post("/login", response_model=models.Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("20/minute") # A slightly higher limit for login attempts
+async def login_for_access_token(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user_in_db = get_user_by_email(db, email=form_data.username)
 
-    # Refined error handling for clearer internal logging/debugging
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Incorrect email or password", # Generic message for the client
+        detail="Incorrect email or password",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
     if not user_in_db:
-        print(f"Login attempt failed: User '{form_data.username}' not found.") # For server logs
+        print(f"Login attempt failed: User '{form_data.username}' not found.")
         raise credentials_exception
 
     if not verify_password(form_data.password, user_in_db.hashed_password):
-        print(f"Login attempt failed: Incorrect password for user '{form_data.username}'.") # For server logs
+        print(f"Login attempt failed: Incorrect password for user '{form_data.username}'.")
         raise credentials_exception
 
     if not user_in_db.is_active:
@@ -92,10 +92,6 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-# Example of a protected route using the dependency
-# The response_model should now use the Pydantic schema for User
 @router.get("/users/me", response_model=models.UserSchema)
 async def read_users_me(current_user: models.UserDB = Depends(get_current_active_user)):
-    # current_user is now an instance of models.UserDB (SQLAlchemy model)
-    # Pydantic will automatically convert it to models.UserSchema based on from_attributes = True
     return current_user
